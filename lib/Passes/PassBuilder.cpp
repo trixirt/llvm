@@ -65,6 +65,7 @@
 #include "llvm/Transforms/IPO/AlwaysInliner.h"
 #include "llvm/Transforms/IPO/ArgumentPromotion.h"
 #include "llvm/Transforms/IPO/CalledValuePropagation.h"
+#include "llvm/Transforms/IPO/CodeSizeOutliner.h"
 #include "llvm/Transforms/IPO/ConstantMerge.h"
 #include "llvm/Transforms/IPO/CrossDSOCFI.h"
 #include "llvm/Transforms/IPO/DeadArgumentElimination.h"
@@ -184,6 +185,11 @@ static cl::opt<bool> EnableGVNSink(
 static cl::opt<bool> EnableUnrollAndJam(
     "enable-npm-unroll-and-jam", cl::init(false), cl::Hidden,
     cl::desc("Enable the Unroll and Jam pass for the new PM (default = off)"));
+
+
+static cl::opt<bool> EnableEarlyCSO(
+    "enable-npm-early-cso", cl::init(false), cl::Hidden,
+    cl::desc("Enable an early run of the code size outlining pass for the new PM (default = off)"));
 
 static cl::opt<bool> EnableSyntheticCounts(
     "enable-npm-synthetic-counts", cl::init(false), cl::Hidden, cl::ZeroOrMore,
@@ -650,6 +656,10 @@ PassBuilder::buildModuleSimplificationPipeline(OptimizationLevel Level,
   if (EnableSyntheticCounts && !PGOOpt)
     MPM.addPass(SyntheticCountsPropagation());
 
+  // Add an early code size outlining pass.
+  if (EnableEarlyCSO && isOptimizingForSize(Level))
+    MPM.addPass(CodeSizeOutlinerPass());
+
   // Require the GlobalsAA analysis for the module so we can query it within
   // the CGSCC pipeline.
   MPM.addPass(RequireAnalysisPass<GlobalsAA, Module>());
@@ -845,6 +855,10 @@ PassBuilder::buildModuleOptimizationPipeline(OptimizationLevel Level,
   MPM.addPass(createModuleToFunctionPassAdaptor(std::move(OptimizePM)));
 
   MPM.addPass(CGProfilePass());
+
+  // Add the late outlining pass.
+  if(isOptimizingForSize(Level))
+    MPM.addPass(CodeSizeOutlinerPass());
 
   // Now we need to do some global optimization transforms.
   // FIXME: It would seem like these should come first in the optimization

@@ -42,6 +42,7 @@ add_llvm_library(LLVMTransformUtils
   ModuleUtils.cpp
   NameAnonGlobals.cpp
   OrderedInstructions.cpp
+  Outliner.cpp
   PredicateInfo.cpp
   PromoteMemoryToRegister.cpp
   StripGCRelocates.cpp

@@ -205,6 +205,12 @@ ModulePass *createMergeFunctionsPass();
 /// createPartialInliningPass - This pass inlines parts of functions.
 ///
 ModulePass *createPartialInliningPass();
+ 
+//===----------------------------------------------------------------------===//
+/// createCodeSizeOutlinerPass - This pass outlines congruent parts of
+/// functions.
+///
+ModulePass *createCodeSizeOutlinerPass();
 
 //===----------------------------------------------------------------------===//
 /// createBarrierNoopPass - This pass is purely a module pass barrier in a pass
