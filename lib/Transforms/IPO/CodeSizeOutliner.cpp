@@ -25,7 +25,6 @@
 #include "llvm/Analysis/ProfileSummaryInfo.h"
 #include "llvm/Analysis/RegionInfo.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
-#include "llvm/Analysis/Utils/Local.h"
 #include "llvm/IR/CallSite.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DiagnosticInfo.h"
@@ -33,8 +32,13 @@
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/Pass.h"
 #include "llvm/Transforms/IPO.h"
+#include "llvm/Transforms/Utils/Local.h"
 #include "llvm/Transforms/Utils/Outliner.h"
 #include <sstream>
+
+#ifndef DEBUG
+#define DEBUG(a)
+#endif
 
 using namespace llvm;
 
