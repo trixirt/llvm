@@ -152,13 +152,13 @@ static cl::opt<bool> EnableGVNSink(
     "enable-gvn-sink", cl::init(false), cl::Hidden,
     cl::desc("Enable the GVN sinking pass (default = off)"));
 
-static cl::opt<bool> EnableCSO(
-  "enable-cso", cl::init(false), cl::Hidden,
-  cl::desc("Enable outlining for code size (default = off)"));
+static cl::opt<bool> EnableCSO("enable-cso", cl::init(false), cl::Hidden,
+			       cl::ZeroOrMore,
+			       cl::desc("Enable IR outlining"));
 
-static cl::opt<bool> EnableEarlyCSO(
-  "enable-early-cso", cl::init(false), cl::Hidden,
-  cl::desc("Enable an early run of the code size outliner pass (default = off)"));
+static cl::opt<bool> EnableEarlyCSO("enable-early-cso", cl::init(false),
+				    cl::Hidden, cl::ZeroOrMore,
+				    cl::desc("Enable early IR outlining"));
 
 PassManagerBuilder::PassManagerBuilder() {
     OptLevel = 2;
