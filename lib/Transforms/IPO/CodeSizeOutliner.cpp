@@ -150,7 +150,12 @@ unsigned getTypeSize(const DataLayout &DL, Type *Ty, unsigned WidestRegister) {
 // Helper function for getting the register usage of type /p Ty.
 unsigned getRegisterUsage(const DataLayout &DL, Type *Ty,
                           unsigned WidestRegister) {
-  return getTypeSize(DL, Ty, WidestRegister) / WidestRegister;
+  unsigned ret = 0;
+  // getTypeSize calls getTypeSizeInBits which expects that
+  // the type size is non zero.  So check..
+  if (Ty != nullptr && Ty->isSized())
+    ret = getTypeSize(DL, Ty, WidestRegister) / WidestRegister;
+  return ret;
 }
 
 // Helper to get the cost of a constant.
