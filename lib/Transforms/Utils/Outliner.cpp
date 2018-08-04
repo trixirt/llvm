@@ -545,10 +545,10 @@ private:
       case Intrinsic::memmove:
       case Intrinsic::memcpy:
       case Intrinsic::memset:
-        /// Alignment.
-        return LCS.getArgOperand(3) == RCS.getArgOperand(3) &&
+        /// Size.
+        return LCS.getArgOperand(2) == RCS.getArgOperand(2) &&
           /// Volatile flag.
-          LCS.getArgOperand(4) == RCS.getArgOperand(4);
+          LCS.getArgOperand(3) == RCS.getArgOperand(3);
       case Intrinsic::objectsize:
         /// Min.
         return LCS.getArgOperand(1) == RCS.getArgOperand(1) &&
