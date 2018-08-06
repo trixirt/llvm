@@ -36,10 +36,6 @@
 #include "llvm/Transforms/Utils/Outliner.h"
 #include <sstream>
 
-#ifndef DEBUG
-#define DEBUG(a)
-#endif
-
 using namespace llvm;
 
 static cl::opt<unsigned> MinOccurrences(
@@ -211,7 +207,7 @@ public:
       Info->Cost = computeInstrCost(TTI, InstrIdx);
 #ifndef NDEBUG
       Instruction *I = getInstr(InstrIdx);
-      DEBUG(dbgs() << "Instruction Cost : " << Info->Cost << " : " << *I
+      LLVM_DEBUG(dbgs() << "Instruction Cost : " << Info->Cost << " : " << *I
                    << "\n");
 #endif
     }
@@ -666,7 +662,7 @@ struct FunctionSplicer {
     OutlinedFn->setName(Twine("cso_") + Twine(NumOutlined++));
 
     // Debug.
-    DEBUG(dbgs() << "** Outlining : " << OutlinedFn->getName() << "\n"
+    LLVM_DEBUG(dbgs() << "** Outlining : " << OutlinedFn->getName() << "\n"
                  << " Candidate : " << OC.ID << "\n"
                  << " occurrences : " << OC.size() << "\n"
                  << " size : " << OC.Len << "\n"
@@ -1636,8 +1632,8 @@ private:
       unsigned NumOccurences = OC.size();
       if (NumOccurences < MinOccurrences)
         continue;
-      DEBUG(dbgs() << "\nCandidate : " << OC.ID << "\n");
-      DEBUG(dbgs() << "Num : " << NumOccurences << "; Len : " << OC.Len
+      LLVM_DEBUG(dbgs() << "\nCandidate : " << OC.ID << "\n");
+      LLVM_DEBUG(dbgs() << "Num : " << NumOccurences << "; Len : " << OC.Len
                    << "\n");
 
       /// Use the first occurrence as an example for cost analysis.
@@ -1809,11 +1805,11 @@ private:
       ///   = call instruction + prepare each parameter + reload outputs.
       CostPerOccurence += 1 + NumCallRegisters + CostFromReLoad;
 
-      DEBUG(dbgs() << "Inputs : " << Data.InputSeq.size() << "["
+      LLVM_DEBUG(dbgs() << "Inputs : " << Data.InputSeq.size() << "["
                    << UniqueInputOperands.size() << "]"
                    << "; Outputs : " << Data.Outputs.count() << "\n");
-      DEBUG(dbgs() << "Chain Cost : " << ChainCost << "\n");
-      DEBUG(dbgs() << "CostPerOccur : " << CostPerOccurence << "\n");
+      LLVM_DEBUG(dbgs() << "Chain Cost : " << ChainCost << "\n");
+      LLVM_DEBUG(dbgs() << "CostPerOccur : " << CostPerOccurence << "\n");
 
       // No possibility of benefit.
       if (CostPerOccurence >= ChainCost)
@@ -1842,9 +1838,9 @@ private:
       unsigned OutlineBenefit = OC.BenefitPerOccur * NumOccurences;
 
       // Outline cost statistics.
-      DEBUG(dbgs() << "BenefitPerOccur : " << OC.BenefitPerOccur << "\n");
-      DEBUG(dbgs() << "NewFunctionCost : " << NewFunctionCost << "\n");
-      DEBUG(dbgs() << "ParameterCost : " << NumCallRegisters << "\n");
+      LLVM_DEBUG(dbgs() << "BenefitPerOccur : " << OC.BenefitPerOccur << "\n");
+      LLVM_DEBUG(dbgs() << "NewFunctionCost : " << NewFunctionCost << "\n");
+      LLVM_DEBUG(dbgs() << "ParameterCost : " << NumCallRegisters << "\n");
 
       // No benefit.
       if (OutlineBenefit <= NewFunctionCost)
@@ -1873,7 +1869,7 @@ private:
         RegisterCost += 3;
 
       NewFunctionCost += RegisterCost;
-      DEBUG(dbgs() << "Estimated register cost : " << RegisterCost << "\n");
+      LLVM_DEBUG(dbgs() << "Estimated register cost : " << RegisterCost << "\n");
 
       // No benefit.
       if (OutlineBenefit <= NewFunctionCost)
@@ -2055,8 +2051,8 @@ private:
       }
     }
 
-    DEBUG(dbgs() << "\n * Estimating spill cost per occurrence *\n");
-    DEBUG(dbgs() << " - Num Registers : " << NumRegisters << "\n");
+    LLVM_DEBUG(dbgs() << "\n * Estimating spill cost per occurrence *\n");
+    LLVM_DEBUG(dbgs() << " - Num Registers : " << NumRegisters << "\n");
     unsigned ViableRegisters = NumRegisters;
 
     // After we have the usages we rewalk the outline candidates and
@@ -2064,7 +2060,7 @@ private:
     for (OutlineCandidate &OC : CandidateList) {
       if (!OC.isValid())
         continue;
-      DEBUG(dbgs() << "\nCandidate : " << OC.ID << "\n");
+      LLVM_DEBUG(dbgs() << "\nCandidate : " << OC.ID << "\n");
       AdditionalCandidateData &Data = OM.getCandidateData(OC);
       unsigned NumOutputs = Data.Outputs.count();
       for (unsigned i = 0, e = OC.size(); i < e; ++i) {
@@ -2090,12 +2086,12 @@ private:
         if (TotalUsage > ViableRegisters)
           Cost = TotalUsage - ViableRegisters;
 
-        DEBUG(dbgs() << "Occur " << i << "\n");
-        DEBUG(dbgs() << " - Usage : " << Usage << "\n");
-        DEBUG(dbgs() << " - Call Registers : " << Data.NumCallRegisters
+        LLVM_DEBUG(dbgs() << "Occur " << i << "\n");
+        LLVM_DEBUG(dbgs() << " - Usage : " << Usage << "\n");
+        LLVM_DEBUG(dbgs() << " - Call Registers : " << Data.NumCallRegisters
                      << "\n");
-        DEBUG(dbgs() << " - Outputs : " << NumOutputs << "\n");
-        DEBUG(dbgs() << " - Cost : " << Cost << "\n");
+        LLVM_DEBUG(dbgs() << " - Outputs : " << NumOutputs << "\n");
+        LLVM_DEBUG(dbgs() << " - Cost : " << Cost << "\n");
 
         if (OC.Benefit <= Cost) {
           OC.invalidate();
