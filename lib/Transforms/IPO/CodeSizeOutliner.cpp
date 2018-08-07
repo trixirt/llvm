@@ -913,7 +913,7 @@ private:
         Input &I = CInst.InputSeqs[i];
         Instruction *ReplI = OM.getInstr(InitialStartIdx + I.InstrNo);
         APInt &Diff = CInst.Diffs[i];
-        if (Diff.getZExtValue() == 0) {
+        if (Diff.isNullValue()) {
           ReplI->setOperand(I.OpNo, CArg);
           continue;
         }
@@ -1485,7 +1485,7 @@ private:
       ConstantCondenseInstance &CInst = OCData.ConstInsts.back();
 
       // Add the input locations.
-      SmallSet<ssize_t, 8> UniqueDiffs;
+      SmallSet<SmallString<64>, 8> UniqueDiffs;
       unsigned ConstInputStart = ConstIntNum + 1;
       for (unsigned ConstInput : InstMemberships.set_bits()) {
         unsigned InputNo = ConstNumToFnInputMap[ConstInput];
@@ -1495,9 +1495,11 @@ private:
         RemovedInputs.set(InputNo);
 
         // Add this diff.
-        ssize_t LastDiff = Diff.getSExtValue();
-        if (LastDiff != 0)
-          UniqueDiffs.insert(LastDiff);
+	if (!Diff.isNullValue()) {
+	  SmallString<64> S;
+	  Diff.toStringSigned(S);
+	  UniqueDiffs.insert(S);
+	}
       }
 
       // Add the amount of add instructions needed for this instance.
