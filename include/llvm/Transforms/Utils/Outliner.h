@@ -82,44 +82,43 @@ std::vector<OutlineCandidate> findSequentialOutliningCandidates(
 bool pruneSequentialOutlineCandidateList(MutableArrayRef<OutlineCandidate> CL,
                                          unsigned NumMappedInstructions);
 
-
 /// \brief Helper struct containing mapping information for a module.
 class OutlinerMapper {
 public:
-	// Get the instruction at index /p Idx.
-	template<typename InstrTy>
-	InstrTy *getInstr(unsigned Idx) { return (InstrTy*)InstrVec[Idx]; }
+  // Get the instruction at index /p Idx.
+  template <typename InstrTy> InstrTy *getInstr(unsigned Idx) {
+    return (InstrTy *)InstrVec[Idx];
+  }
 
-	// Map a new instruction.
-	void mapInstr(void *I) {
+  // Map a new instruction.
+  void mapInstr(void *I) {
     if (I)
       InstructionToIdxMap.try_emplace(I, InstrVec.size());
-		InstrVec.push_back(I);
-	}
+    InstrVec.push_back(I);
+  }
 
-	// Get the index of /p I inside of the internal vector.
-	unsigned getInstrIdx(void *I) {
-		auto It = InstructionToIdxMap.find(I);
-		return LLVM_UNLIKELY(It == InstructionToIdxMap.end()) ? -1 : It->second;
-	}
+  // Get the index of /p I inside of the internal vector.
+  unsigned getInstrIdx(void *I) {
+    auto It = InstructionToIdxMap.find(I);
+    return LLVM_UNLIKELY(It == InstructionToIdxMap.end()) ? -1 : It->second;
+  }
 
-	// Get the number of mapped instructions.
-	unsigned getNumMappedInstructions() const { return InstrVec.size(); }
+  // Get the number of mapped instructions.
+  unsigned getNumMappedInstructions() const { return InstrVec.size(); }
 
 private:
-	/// Stores location of instructions mapped to the corresponding index in
-	///  the CCVec.
-	std::vector<void *> InstrVec;
+  /// Stores location of instructions mapped to the corresponding index in
+  ///  the CCVec.
+  std::vector<void *> InstrVec;
 
-	/// Map<Instruction, Index in InstrVec>
-	DenseMap<void *, unsigned> InstructionToIdxMap;
+  /// Map<Instruction, Index in InstrVec>
+  DenseMap<void *, unsigned> InstructionToIdxMap;
 };
 
 // Map the module /p M to prepare for outlining.
-std::vector<unsigned> mapIRModule(OutlinerMapper &OM, Module &M, 
-  ProfileSummaryInfo *PSI, 
-  function_ref<BlockFrequencyInfo &(Function &)> GetBFI);
-
+std::vector<unsigned>
+mapIRModule(OutlinerMapper &OM, Module &M, ProfileSummaryInfo *PSI,
+            function_ref<BlockFrequencyInfo &(Function &)> GetBFI);
 
 } // namespace llvm
 
