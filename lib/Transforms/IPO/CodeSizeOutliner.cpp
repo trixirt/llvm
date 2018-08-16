@@ -189,7 +189,7 @@ public:
   ///
 
   // Get the instruction at index /p Idx.
-  Instruction *getInstr(unsigned Idx) { 
+  Instruction *getInstr(unsigned Idx) {
     return OutlinerMapper::getInstr<Instruction>(Idx);
   }
   // Get the operand /p OpIdx of the instruction at index /p Idx.
@@ -208,7 +208,7 @@ public:
 #ifndef NDEBUG
       Instruction *I = getInstr(InstrIdx);
       LLVM_DEBUG(dbgs() << "Instruction Cost : " << Info->Cost << " : " << *I
-                   << "\n");
+                        << "\n");
 #endif
     }
     return Info->Cost;
@@ -438,8 +438,8 @@ private:
 
 /// \brief A specific instance of an outlined candidate.
 struct FunctionSplicer {
-  FunctionSplicer(bool EmitProfileData) 
-		: EmitProfileData(EmitProfileData), NumOutlined(0) {
+  FunctionSplicer(bool EmitProfileData)
+      : EmitProfileData(EmitProfileData), NumOutlined(0) {
     // Prepare the function attributes that we don't want to inherit from any
     // parents.
     NonInheritAttrs.addAttribute(Attribute::AlwaysInline);
@@ -458,7 +458,8 @@ struct FunctionSplicer {
   }
 
   // Reset the outliner to prepare for a new instance.
-  void prepareForNewCandidate(const OutlineCandidate &OC, IROutlinerMapper &OM) {
+  void prepareForNewCandidate(const OutlineCandidate &OC,
+                              IROutlinerMapper &OM) {
     OutlinedFn = nullptr;
     InitialStartIdx = *OC.begin();
     AdditionalCandidateData &Data = OM.getCandidateData(OC);
@@ -663,11 +664,12 @@ struct FunctionSplicer {
 
     // Debug.
     LLVM_DEBUG(dbgs() << "** Outlining : " << OutlinedFn->getName() << "\n"
-                 << " Candidate : " << OC.ID << "\n"
-                 << " occurrences : " << OC.size() << "\n"
-                 << " size : " << OC.Len << "\n"
-                 << " benefit : " << OC.Benefit << "\n"
-                 << " benefit per occurrence : " << OC.BenefitPerOccur << "\n");
+                      << " Candidate : " << OC.ID << "\n"
+                      << " occurrences : " << OC.size() << "\n"
+                      << " size : " << OC.Len << "\n"
+                      << " benefit : " << OC.Benefit << "\n"
+                      << " benefit per occurrence : " << OC.BenefitPerOccur
+                      << "\n");
   }
 
 private:
@@ -828,9 +830,9 @@ private:
   }
 
   // \brief Outline the initial occurrence of this chain.
-  void outlineInitialOccurrence(const OutlineCandidate &OC, IROutlinerMapper &OM,
-                                size_t StartIdx, ArrayRef<Value *> Args,
-                                BasicBlock *Entry) {
+  void outlineInitialOccurrence(const OutlineCandidate &OC,
+                                IROutlinerMapper &OM, size_t StartIdx,
+                                ArrayRef<Value *> Args, BasicBlock *Entry) {
     Function *ParentFn = Entry->getParent();
 
     /// Function type for outlined function.
@@ -953,8 +955,8 @@ private:
   unsigned InitialStartIdx;
   /// Set of attributes that are not to be inherited from parent functions.
   AttrBuilder NonInheritAttrs;
-	/// Number of functions that have been outlined.
-	unsigned NumOutlined;
+  /// Number of functions that have been outlined.
+  unsigned NumOutlined;
 };
 
 /// \brief Perform analysis and verification for the found outline candidates.
@@ -1029,7 +1031,7 @@ private:
   // candidate.
   struct VerifyInst {
     VerifyInst(CompatibleAttrCache *Cache) : Cache(Cache) {}
-		VerifyInst() = default;
+    VerifyInst() = default;
     void reset(Function *F) {
       Fn = F;
       Indices.clear();
@@ -1091,8 +1093,8 @@ private:
           size_t InternalInputIt = It - VerificationCands.begin();
           ++Counts[InternalInputIt];
           OccurrenceInputIdx.push_back(InternalInputIt);
-					continue;
-        } 
+          continue;
+        }
         unsigned OrigCapacity = CurrentOccurVerifyInst.Indices.capacity();
         OccurrenceInputIdx.push_back(VerificationCands.size());
         VerificationCands.emplace_back(std::move(CurrentOccurVerifyInst));
@@ -1290,10 +1292,10 @@ private:
         // FIXME: Non invoke outputs may need special handling for dominance.
         unsigned NumOutputs = OCData.Outputs.count();
         if (isa<InvokeInst>(OM.getInstr(FirstOccur + OC.Len - 1))) {
-            if (NumOutputs > 1)
-                return true;
-            if (NumOutputs == 1 && !OCData.Outputs.test(OC.Len - 1))
-                return true;
+          if (NumOutputs > 1)
+            return true;
+          if (NumOutputs == 1 && !OCData.Outputs.test(OC.Len - 1))
+            return true;
         }
         return false;
       };
@@ -1495,11 +1497,11 @@ private:
         RemovedInputs.set(InputNo);
 
         // Add this diff.
-	if (!Diff.isNullValue()) {
-	  SmallString<64> S;
-	  Diff.toStringSigned(S);
-	  UniqueDiffs.insert(S);
-	}
+        if (!Diff.isNullValue()) {
+          SmallString<64> S;
+          Diff.toStringSigned(S);
+          UniqueDiffs.insert(S);
+        }
       }
 
       // Add the amount of add instructions needed for this instance.
@@ -1636,7 +1638,7 @@ private:
         continue;
       LLVM_DEBUG(dbgs() << "\nCandidate : " << OC.ID << "\n");
       LLVM_DEBUG(dbgs() << "Num : " << NumOccurences << "; Len : " << OC.Len
-                   << "\n");
+                        << "\n");
 
       /// Use the first occurrence as an example for cost analysis.
       unsigned FirstOccur = *OC.begin();
@@ -1771,8 +1773,8 @@ private:
         //  function, we will use this for the cost of the call itself.
         TotalParamSize += getTypeSize(*Layout, IOpTy, WidestRegister);
 
-				// Constant operands may have additional cost.
-				bool HasFreeAddressComp = TTI.getAddressComputationCost(IOpTy) == 0;
+        // Constant operands may have additional cost.
+        bool HasFreeAddressComp = TTI.getAddressComputationCost(IOpTy) == 0;
         Constant *COp = dyn_cast<Constant>(IOp);
         if (COp && !HasFreeAddressComp)
           ChainCost -= getGlobalValueCost(COp);
@@ -1808,8 +1810,8 @@ private:
       CostPerOccurence += 1 + NumCallRegisters + CostFromReLoad;
 
       LLVM_DEBUG(dbgs() << "Inputs : " << Data.InputSeq.size() << "["
-                   << UniqueInputOperands.size() << "]"
-                   << "; Outputs : " << Data.Outputs.count() << "\n");
+                        << UniqueInputOperands.size() << "]"
+                        << "; Outputs : " << Data.Outputs.count() << "\n");
       LLVM_DEBUG(dbgs() << "Chain Cost : " << ChainCost << "\n");
       LLVM_DEBUG(dbgs() << "CostPerOccur : " << CostPerOccurence << "\n");
 
@@ -1871,7 +1873,8 @@ private:
         RegisterCost += 3;
 
       NewFunctionCost += RegisterCost;
-      LLVM_DEBUG(dbgs() << "Estimated register cost : " << RegisterCost << "\n");
+      LLVM_DEBUG(dbgs() << "Estimated register cost : " << RegisterCost
+                        << "\n");
 
       // No benefit.
       if (OutlineBenefit <= NewFunctionCost)
@@ -1919,11 +1922,11 @@ private:
     for (auto &Interval : EndPoint)
       TransposeEnds[Interval.second].push_back(Interval.first);
 
-		Function *F = OM.getInstrFunction(*OC.begin());
-		TargetTransformInfo &TTI = GetTTI(*F);
-		unsigned WidestRegister = TTI.getRegisterBitWidth(false);
-		unsigned NumRegisters = TTI.getNumberOfRegisters(false);
-		unsigned SpillCount = 0;
+    Function *F = OM.getInstrFunction(*OC.begin());
+    TargetTransformInfo &TTI = GetTTI(*F);
+    unsigned WidestRegister = TTI.getRegisterBitWidth(false);
+    unsigned NumRegisters = TTI.getNumberOfRegisters(false);
+    unsigned SpillCount = 0;
     SmallSet<Instruction *, 8> OpenIntervals;
     for (unsigned i = 0, InstIdx = FirstOccur; i < OC.Len; ++i, ++InstIdx) {
       // Remove all of the instructions that end at this location.
@@ -1931,21 +1934,22 @@ private:
       for (unsigned ToRemove : List)
         OpenIntervals.erase(OM.getInstr(ToRemove));
 
-			InstructionInfo &II = OM.getInstrInfo(InstIdx);
-			if (II.Cost == TargetTransformInfo::TCC_Free)
-				continue;
+      InstructionInfo &II = OM.getInstrInfo(InstIdx);
+      if (II.Cost == TargetTransformInfo::TCC_Free)
+        continue;
 
       // Count the number of live intervals.
       unsigned LiveIntervals = 0;
       for (auto Inst : OpenIntervals)
-				LiveIntervals += getRegisterUsage(*Layout, Inst->getType(), WidestRegister);
+        LiveIntervals +=
+            getRegisterUsage(*Layout, Inst->getType(), WidestRegister);
 
-			// Check for spills.
-			if (LiveIntervals > NumRegisters) {
-				SpillCount += LiveIntervals - NumRegisters;
-				for (unsigned i = 0, e = LiveIntervals - NumRegisters; i < e; ++i)
-					OpenIntervals.erase(*OpenIntervals.begin());
-			}
+      // Check for spills.
+      if (LiveIntervals > NumRegisters) {
+        SpillCount += LiveIntervals - NumRegisters;
+        for (unsigned i = 0, e = LiveIntervals - NumRegisters; i < e; ++i)
+          OpenIntervals.erase(*OpenIntervals.begin());
+      }
 
       // Add the current instruction to the list of open intervals.
       OpenIntervals.insert(OM.getInstr(InstIdx));
@@ -2091,7 +2095,7 @@ private:
         LLVM_DEBUG(dbgs() << "Occur " << i << "\n");
         LLVM_DEBUG(dbgs() << " - Usage : " << Usage << "\n");
         LLVM_DEBUG(dbgs() << " - Call Registers : " << Data.NumCallRegisters
-                     << "\n");
+                          << "\n");
         LLVM_DEBUG(dbgs() << " - Outputs : " << NumOutputs << "\n");
         LLVM_DEBUG(dbgs() << " - Cost : " << Cost << "\n");
 
@@ -2115,18 +2119,18 @@ private:
 };
 
 // \brief Outline all of the profitable candidates.
-void outlineCandidates(MutableArrayRef<OutlineCandidate> CL, IROutlinerMapper &OM,
-                       bool HasProfileData) {
+void outlineCandidates(MutableArrayRef<OutlineCandidate> CL,
+                       IROutlinerMapper &OM, bool HasProfileData) {
   FunctionSplicer FS(HasProfileData);
   for (const OutlineCandidate &OC : CL) {
     if (!OC.isValid())
       continue;
-		++NumCandidatesOutlined;
+    ++NumCandidatesOutlined;
 
-		// Prepare->Outline->Finalize
+    // Prepare->Outline->Finalize
     FS.prepareForNewCandidate(OC, OM);
-		for(unsigned Occur : OC)
-			FS.outlineOccurrence(OC, Occur, OM);
+    for (unsigned Occur : OC)
+      FS.outlineOccurrence(OC, Occur, OM);
     FS.finalize(OC, OM);
   }
 }
@@ -2149,10 +2153,10 @@ bool runImpl(Module &M, ProfileSummaryInfo *PSI,
         if (Len != 1)
           return false;
         Instruction *I = OM.getInstr(Occurs[0]);
-				// Empty function call.
+        // Empty function call.
         if (CallSite CS = CallSite(I))
           return CS.getCalledFunction() && CS.getNumArgOperands() == 0;
-				// Non constant operation.
+        // Non constant operation.
         return none_of(I->operand_values(),
                        [](Value *V) { return isa<Constant>(V); });
       };
@@ -2163,7 +2167,7 @@ bool runImpl(Module &M, ProfileSummaryInfo *PSI,
   if (CL.empty())
     return false;
 
-	// Analyze candidate profitability.
+  // Analyze candidate profitability.
   OutlinerAnalysis OAI(OM, CL, GetTTI, &M.getDataLayout());
   OAI.analyzeCandidateList();
 

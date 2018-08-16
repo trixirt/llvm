@@ -24,12 +24,12 @@
 using namespace llvm;
 
 static cl::opt<bool> AllowODR(
-  "cso-allow-odr", cl::init(false), cl::Hidden,
-  cl::desc("Allow outlining from linkonce_odr and weak_odr functions."));
+    "cso-allow-odr", cl::init(false), cl::Hidden,
+    cl::desc("Allow outlining from linkonce_odr and weak_odr functions."));
 
 static cl::opt<bool> DumpCC(
-  "cso-dump-cc", cl::init(false), cl::Hidden,
-  cl::desc("Dump information about the congruent between instructions."));
+    "cso-dump-cc", cl::init(false), cl::Hidden,
+    cl::desc("Dump information about the congruent between instructions."));
 
 // Suffix array implementation.
 namespace {
@@ -417,7 +417,6 @@ bool llvm::pruneSequentialOutlineCandidateList(
   return HasProfitableCandidate;
 }
 
-
 /// Mapping an IR module for outlining.
 
 /// \brief Expression with relaxed equivalency constraints.
@@ -427,7 +426,7 @@ public:
   enum SpecialState { StructGep, ConstrainedCall, None };
 
   RelaxedExpression(Instruction &I)
-    : Inst(&I), SS(SpecialState::None), HashVal(0) {
+      : Inst(&I), SS(SpecialState::None), HashVal(0) {
     // Check the special state.
     CallSite CS(Inst);
     if (CS) {
@@ -457,23 +456,21 @@ public:
       if (CS.getNumArgOperands() != RCS.getNumArgOperands())
         return false;
       if (CS.getCallingConv() != RCS.getCallingConv() ||
-        CS.getAttributes() != RCS.getAttributes())
+          CS.getAttributes() != RCS.getAttributes())
         return false;
       if (CS.isInvoke()) {
         InvokeInst *L = cast<InvokeInst>(Inst), *R = cast<InvokeInst>(OE.Inst);
         if (!L->hasIdenticalOperandBundleSchema(*R))
           return false;
-      }
-      else {
+      } else {
         CallInst *L = cast<CallInst>(Inst), *R = cast<CallInst>(OE.Inst);
         if (!L->hasIdenticalOperandBundleSchema(*R))
           return false;
       }
-    }
-    else if (isa<BitCastInst>(Inst))
+    } else if (isa<BitCastInst>(Inst))
       return Inst->getType() == OE.Inst->getType();
     else if (!Inst->isSameOperationAs(OE.Inst,
-      Instruction::CompareIgnoringAlignment))
+                                      Instruction::CompareIgnoringAlignment))
       return false;
     return checkSpecialEquivalence(OE);
   }
@@ -501,10 +498,10 @@ private:
     // to the function, which would fail to link.
     bool HasAvailableExternallyLinkage = F->hasAvailableExternallyLinkage();
     if (HasAvailableExternallyLinkage &&
-      F->hasFnAttribute(Attribute::AlwaysInline))
+        F->hasFnAttribute(Attribute::AlwaysInline))
       return false;
     return F->hasExactDefinition() || F->hasAddressTaken() ||
-      F->hasLinkOnceLinkage();
+           F->hasLinkOnceLinkage();
   }
   // Special checks for instructions that have non generic equivalency.
   bool checkSpecialEquivalence(const RelaxedExpression &Other) const {
@@ -527,7 +524,7 @@ private:
       // Struct indices must be constant.
       if (SS == StructGep)
         return compareStructIndices(cast<GetElementPtrInst>(Inst),
-          cast<GetElementPtrInst>(OE));
+                                    cast<GetElementPtrInst>(OE));
       break;
     }
     default:
@@ -536,7 +533,7 @@ private:
     return true;
   }
   bool checkConstrainedCallEquivalence(const CallSite &LCS,
-    const CallSite &RCS) const {
+                                       const CallSite &RCS) const {
     const Value *CIVal = LCS.getCalledValue();
     if (CIVal != RCS.getCalledValue())
       return false;
@@ -547,23 +544,23 @@ private:
       case Intrinsic::memset:
         /// Size.
         return LCS.getArgOperand(2) == RCS.getArgOperand(2) &&
-          /// Volatile flag.
-          LCS.getArgOperand(3) == RCS.getArgOperand(3);
+               /// Volatile flag.
+               LCS.getArgOperand(3) == RCS.getArgOperand(3);
       case Intrinsic::objectsize:
         /// Min.
         return LCS.getArgOperand(1) == RCS.getArgOperand(1) &&
-          /// Null unknown.
-          LCS.getArgOperand(2) == RCS.getArgOperand(2);
+               /// Null unknown.
+               LCS.getArgOperand(2) == RCS.getArgOperand(2);
       case Intrinsic::expect:
         /// Expected value.
         return LCS.getArgOperand(1) == RCS.getArgOperand(1);
       case Intrinsic::prefetch:
         /// RW.
         return LCS.getArgOperand(1) == RCS.getArgOperand(1) &&
-          /// Locality.
-          LCS.getArgOperand(2) == RCS.getArgOperand(2) &&
-          /// Cache Type.
-          LCS.getArgOperand(3) == RCS.getArgOperand(3);
+               /// Locality.
+               LCS.getArgOperand(2) == RCS.getArgOperand(2) &&
+               /// Cache Type.
+               LCS.getArgOperand(3) == RCS.getArgOperand(3);
       case Intrinsic::ctlz:
       case Intrinsic::cttz:
         /// Is Zero Undef.
@@ -578,7 +575,7 @@ private:
     return true;
   }
   bool compareStructIndices(GetElementPtrInst *L,
-    const GetElementPtrInst *R) const {
+                            const GetElementPtrInst *R) const {
     gep_type_iterator LIt = gep_type_begin(L), LE = gep_type_end(L);
     gep_type_iterator RIt = gep_type_begin(R);
     for (; LIt != LE; ++LIt, ++RIt) {
@@ -589,7 +586,7 @@ private:
   }
   // Check to see if the provided gep /p GEP indexes a struct type.
   bool gepContainsStructType(GetElementPtrInst *GEP) {
-		gep_type_iterator It = gep_type_begin(GEP), E = gep_type_end(GEP);
+    gep_type_iterator It = gep_type_begin(GEP), E = gep_type_end(GEP);
     for (; It != E; ++It)
       if (It.isStruct())
         return true;
@@ -606,31 +603,30 @@ template <> struct DenseMapInfo<const RelaxedExpression *> {
   static const RelaxedExpression *getEmptyKey() {
     auto Val = static_cast<uintptr_t>(-1);
     Val <<=
-      PointerLikeTypeTraits<const RelaxedExpression *>::NumLowBitsAvailable;
+        PointerLikeTypeTraits<const RelaxedExpression *>::NumLowBitsAvailable;
     return reinterpret_cast<const RelaxedExpression *>(Val);
   }
   static const RelaxedExpression *getTombstoneKey() {
     auto Val = static_cast<uintptr_t>(~1U);
     Val <<=
-      PointerLikeTypeTraits<const RelaxedExpression *>::NumLowBitsAvailable;
+        PointerLikeTypeTraits<const RelaxedExpression *>::NumLowBitsAvailable;
     return reinterpret_cast<const RelaxedExpression *>(Val);
   }
   static unsigned getHashValue(const RelaxedExpression *E) {
     return E->getComputedHash();
   }
   static bool isEqual(const RelaxedExpression *LHS,
-    const RelaxedExpression *RHS) {
+                      const RelaxedExpression *RHS) {
     if (LHS == RHS)
       return true;
     if (LHS == getTombstoneKey() || RHS == getTombstoneKey() ||
-      LHS == getEmptyKey() || RHS == getEmptyKey())
+        LHS == getEmptyKey() || RHS == getEmptyKey())
       return false;
     if (LHS->getComputedHash() != RHS->getComputedHash())
       return false;
     return LHS->equals(*RHS);
   }
 };
-
 
 // How an instruction is mapped.
 enum class IRInstructionMapType { Invalid, Ignored, Valid };
@@ -720,10 +716,9 @@ IRInstructionMapType getInstrMapType(Instruction *I) {
   return IRInstructionMapType::Valid;
 }
 
-
 std::vector<unsigned>
 llvm::mapIRModule(OutlinerMapper &OM, Module &M, ProfileSummaryInfo *PSI,
-  function_ref<BlockFrequencyInfo &(Function &)> GetBFI) {
+                  function_ref<BlockFrequencyInfo &(Function &)> GetBFI) {
   bool HasProfileData = PSI->hasProfileSummary();
   std::vector<unsigned> CCVec;
   unsigned CCID = 1, IllegalID = UINT_MAX;
@@ -733,8 +728,8 @@ llvm::mapIRModule(OutlinerMapper &OM, Module &M, ProfileSummaryInfo *PSI,
 
   /// Mapping of expression to congruency id.
   using GlobalCongruencyMapTy =
-    std::array<DenseMap<const RelaxedExpression *, unsigned>,
-    Instruction::OtherOpsEnd>;
+      std::array<DenseMap<const RelaxedExpression *, unsigned>,
+                 Instruction::OtherOpsEnd>;
   GlobalCongruencyMapTy GlobalCC;
 
   // Insert illegal ID at the front to act as a sentinel.
@@ -790,7 +785,7 @@ llvm::mapIRModule(OutlinerMapper &OM, Module &M, ProfileSummaryInfo *PSI,
         // We map each valid instruction to a Relaxed expression and use
         // this for detecting congruency.
         RelaxedExpression *E =
-          new (ExpressionAllocator.Allocate()) RelaxedExpression(I);
+            new (ExpressionAllocator.Allocate()) RelaxedExpression(I);
         auto ItPair = GlobalCC[I.getOpcode()].try_emplace(E, CCID);
         if (ItPair.second)
           ++CCID;
