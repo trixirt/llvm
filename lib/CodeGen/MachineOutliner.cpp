@@ -55,8 +55,8 @@
 /// https://www.cs.helsinki.fi/u/ukkonen/SuffixT1withFigs.pdf
 ///
 //===----------------------------------------------------------------------===//
+#include "llvm/CodeGen/InstructionMapper.h"
 #include "llvm/CodeGen/MachineOutliner.h"
-#include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SuffixTree.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/ADT/Twine.h"
@@ -101,155 +101,6 @@ static cl::opt<bool> EnableLinkOnceODROutlining(
     cl::init(false));
 
 namespace {
-
-/// Maps \p MachineInstrs to unsigned integers and stores the mappings.
-struct InstructionMapper {
-
-  /// The next available integer to assign to a \p MachineInstr that
-  /// cannot be outlined.
-  ///
-  /// Set to -3 for compatability with \p DenseMapInfo<unsigned>.
-  unsigned IllegalInstrNumber = -3;
-
-  /// The next available integer to assign to a \p MachineInstr that can
-  /// be outlined.
-  unsigned LegalInstrNumber = 0;
-
-  /// Correspondence from \p MachineInstrs to unsigned integers.
-  DenseMap<MachineInstr *, unsigned, MachineInstrExpressionTrait>
-      InstructionIntegerMap;
-
-  /// Corresponcence from unsigned integers to \p MachineInstrs.
-  /// Inverse of \p InstructionIntegerMap.
-  DenseMap<unsigned, MachineInstr *> IntegerInstructionMap;
-
-  /// The vector of unsigned integers that the module is mapped to.
-  std::vector<unsigned> UnsignedVec;
-
-  /// Stores the location of the instruction associated with the integer
-  /// at index i in \p UnsignedVec for each index i.
-  std::vector<MachineBasicBlock::iterator> InstrList;
-
-  /// Maps \p *It to a legal integer.
-  ///
-  /// Updates \p InstrList, \p UnsignedVec, \p InstructionIntegerMap,
-  /// \p IntegerInstructionMap, and \p LegalInstrNumber.
-  ///
-  /// \returns The integer that \p *It was mapped to.
-  unsigned mapToLegalUnsigned(MachineBasicBlock::iterator &It) {
-
-    // Get the integer for this instruction or give it the current
-    // LegalInstrNumber.
-    InstrList.push_back(It);
-    MachineInstr &MI = *It;
-    bool WasInserted;
-    DenseMap<MachineInstr *, unsigned, MachineInstrExpressionTrait>::iterator
-        ResultIt;
-    std::tie(ResultIt, WasInserted) =
-        InstructionIntegerMap.insert(std::make_pair(&MI, LegalInstrNumber));
-    unsigned MINumber = ResultIt->second;
-
-    // There was an insertion.
-    if (WasInserted) {
-      LegalInstrNumber++;
-      IntegerInstructionMap.insert(std::make_pair(MINumber, &MI));
-    }
-
-    UnsignedVec.push_back(MINumber);
-
-    // Make sure we don't overflow or use any integers reserved by the DenseMap.
-    if (LegalInstrNumber >= IllegalInstrNumber)
-      report_fatal_error("Instruction mapping overflow!");
-
-    assert(LegalInstrNumber != DenseMapInfo<unsigned>::getEmptyKey() &&
-           "Tried to assign DenseMap tombstone or empty key to instruction.");
-    assert(LegalInstrNumber != DenseMapInfo<unsigned>::getTombstoneKey() &&
-           "Tried to assign DenseMap tombstone or empty key to instruction.");
-
-    return MINumber;
-  }
-
-  /// Maps \p *It to an illegal integer.
-  ///
-  /// Updates \p InstrList, \p UnsignedVec, and \p IllegalInstrNumber.
-  ///
-  /// \returns The integer that \p *It was mapped to.
-  unsigned mapToIllegalUnsigned(MachineBasicBlock::iterator &It) {
-    unsigned MINumber = IllegalInstrNumber;
-
-    InstrList.push_back(It);
-    UnsignedVec.push_back(IllegalInstrNumber);
-    IllegalInstrNumber--;
-
-    assert(LegalInstrNumber < IllegalInstrNumber &&
-           "Instruction mapping overflow!");
-
-    assert(IllegalInstrNumber != DenseMapInfo<unsigned>::getEmptyKey() &&
-           "IllegalInstrNumber cannot be DenseMap tombstone or empty key!");
-
-    assert(IllegalInstrNumber != DenseMapInfo<unsigned>::getTombstoneKey() &&
-           "IllegalInstrNumber cannot be DenseMap tombstone or empty key!");
-
-    return MINumber;
-  }
-
-  /// Transforms a \p MachineBasicBlock into a \p vector of \p unsigneds
-  /// and appends it to \p UnsignedVec and \p InstrList.
-  ///
-  /// Two instructions are assigned the same integer if they are identical.
-  /// If an instruction is deemed unsafe to outline, then it will be assigned an
-  /// unique integer. The resulting mapping is placed into a suffix tree and
-  /// queried for candidates.
-  ///
-  /// \param MBB The \p MachineBasicBlock to be translated into integers.
-  /// \param TII \p TargetInstrInfo for the function.
-  void convertToUnsignedVec(MachineBasicBlock &MBB,
-                            const TargetInstrInfo &TII) {
-    unsigned Flags = TII.getMachineOutlinerMBBFlags(MBB);
-
-    for (MachineBasicBlock::iterator It = MBB.begin(), Et = MBB.end(); It != Et;
-         It++) {
-
-      // Keep track of where this instruction is in the module.
-      switch (TII.getOutliningType(It, Flags)) {
-      case InstrType::Illegal:
-        mapToIllegalUnsigned(It);
-        break;
-
-      case InstrType::Legal:
-        mapToLegalUnsigned(It);
-        break;
-
-      case InstrType::LegalTerminator:
-        mapToLegalUnsigned(It);
-        InstrList.push_back(It);
-        UnsignedVec.push_back(IllegalInstrNumber);
-        IllegalInstrNumber--;
-        break;
-
-      case InstrType::Invisible:
-        break;
-      }
-    }
-
-    // After we're done every insertion, uniquely terminate this part of the
-    // "string". This makes sure we won't match across basic block or function
-    // boundaries since the "end" is encoded uniquely and thus appears in no
-    // repeated substring.
-    InstrList.push_back(MBB.end());
-    UnsignedVec.push_back(IllegalInstrNumber);
-    IllegalInstrNumber--;
-  }
-
-  InstructionMapper() {
-    // Make sure that the implementation of DenseMapInfo<unsigned> hasn't
-    // changed.
-    assert(DenseMapInfo<unsigned>::getEmptyKey() == (unsigned)-1 &&
-           "DenseMapInfo<unsigned>'s empty key isn't -1!");
-    assert(DenseMapInfo<unsigned>::getTombstoneKey() == (unsigned)-2 &&
-           "DenseMapInfo<unsigned>'s tombstone key isn't -2!");
-  }
-};
 
 /// An interprocedural pass which finds repeated sequences of
 /// instructions and replaces them with calls to functions.
@@ -299,6 +150,10 @@ struct MachineOutliner : public ModulePass {
   /// Remark output explaining that a function was outlined.
   void emitOutlinedFunctionRemark(OutlinedFunction &OF);
 
+  using InstructionMapperType =
+    InstructionMapper<MachineBasicBlock, MachineInstr, MachineInstrExpressionTrait>;
+  
+
   /// Find all repeated substrings that satisfy the outlining cost model.
   ///
   /// If a substring appears at least twice, then it must be represented by
@@ -318,7 +173,7 @@ struct MachineOutliner : public ModulePass {
   /// \returns The length of the longest candidate found.
   unsigned
   findCandidates(SuffixTree &ST,
-                 InstructionMapper &Mapper,
+		 InstructionMapperType &Mapper,
                  std::vector<std::shared_ptr<Candidate>> &CandidateList,
                  std::vector<OutlinedFunction> &FunctionList);
 
@@ -333,11 +188,11 @@ struct MachineOutliner : public ModulePass {
   bool outline(Module &M,
                const ArrayRef<std::shared_ptr<Candidate>> &CandidateList,
                std::vector<OutlinedFunction> &FunctionList,
-               InstructionMapper &Mapper);
+	       InstructionMapperType &Mapper);
 
   /// Creates a function for \p OF and inserts it into the module.
   MachineFunction *createOutlinedFunction(Module &M, const OutlinedFunction &OF,
-                                          InstructionMapper &Mapper);
+					  InstructionMapperType &Mapper);
 
   /// Find potential outlining candidates and store them in \p CandidateList.
   ///
@@ -354,7 +209,7 @@ struct MachineOutliner : public ModulePass {
   unsigned
   buildCandidateList(std::vector<std::shared_ptr<Candidate>> &CandidateList,
                      std::vector<OutlinedFunction> &FunctionList,
-                     SuffixTree &ST, InstructionMapper &Mapper);
+                     SuffixTree &ST, InstructionMapperType &Mapper);
 
   /// Helper function for pruneOverlaps.
   /// Removes \p C from the candidate list, and updates its \p OutlinedFunction.
@@ -374,7 +229,8 @@ struct MachineOutliner : public ModulePass {
   /// \param MaxCandidateLen The length of the longest candidate.
   void pruneOverlaps(std::vector<std::shared_ptr<Candidate>> &CandidateList,
                      std::vector<OutlinedFunction> &FunctionList,
-                     InstructionMapper &Mapper, unsigned MaxCandidateLen);
+		     InstructionMapperType &Mapper,
+                     unsigned MaxCandidateLen);
 
   /// Construct a suffix tree on the instructions in \p M and outline repeated
   /// strings from that tree.
@@ -467,7 +323,7 @@ void MachineOutliner::emitOutlinedFunctionRemark(OutlinedFunction &OF) {
 }
 
 unsigned MachineOutliner::findCandidates(
-    SuffixTree &ST, InstructionMapper &Mapper,
+    SuffixTree &ST, InstructionMapperType &Mapper,
     std::vector<std::shared_ptr<Candidate>> &CandidateList,
     std::vector<OutlinedFunction> &FunctionList) {
   CandidateList.clear();
@@ -618,7 +474,7 @@ void MachineOutliner::prune(Candidate &C,
 
 void MachineOutliner::pruneOverlaps(
     std::vector<std::shared_ptr<Candidate>> &CandidateList,
-    std::vector<OutlinedFunction> &FunctionList, InstructionMapper &Mapper,
+    std::vector<OutlinedFunction> &FunctionList, InstructionMapperType &Mapper,
     unsigned MaxCandidateLen) {
 
   // Return true if this candidate became unbeneficial for outlining in a
@@ -710,7 +566,7 @@ void MachineOutliner::pruneOverlaps(
 unsigned MachineOutliner::buildCandidateList(
     std::vector<std::shared_ptr<Candidate>> &CandidateList,
     std::vector<OutlinedFunction> &FunctionList, SuffixTree &ST,
-    InstructionMapper &Mapper) {
+    InstructionMapperType &Mapper) {
 
   std::vector<unsigned> CandidateSequence; // Current outlining candidate.
   unsigned MaxCandidateLen = 0;            // Length of the longest candidate.
@@ -731,7 +587,7 @@ unsigned MachineOutliner::buildCandidateList(
 
 MachineFunction *
 MachineOutliner::createOutlinedFunction(Module &M, const OutlinedFunction &OF,
-                                        InstructionMapper &Mapper) {
+                                        InstructionMapperType &Mapper) {
 
   // Create the function name. This should be unique. For now, just hash the
   // module name and include it in the function name plus the number of this
@@ -834,7 +690,7 @@ MachineOutliner::createOutlinedFunction(Module &M, const OutlinedFunction &OF,
 
 bool MachineOutliner::outline(
     Module &M, const ArrayRef<std::shared_ptr<Candidate>> &CandidateList,
-    std::vector<OutlinedFunction> &FunctionList, InstructionMapper &Mapper) {
+    std::vector<OutlinedFunction> &FunctionList, InstructionMapperType &Mapper) {
 
   bool OutlinedSomething = false;
   // Replace the candidates with calls to their respective outlined functions.
@@ -941,7 +797,7 @@ bool MachineOutliner::runOnModule(Module &M) {
   // it here.
   OutlineFromLinkOnceODRs = EnableLinkOnceODROutlining;
 
-  InstructionMapper Mapper;
+  InstructionMapper<MachineBasicBlock, MachineInstr, MachineInstrExpressionTrait> Mapper;
 
   // Build instruction mappings for each function in the module. Start by
   // iterating over each Function in M.
@@ -971,6 +827,16 @@ bool MachineOutliner::runOnModule(Module &M) {
     if (!TII->isFunctionSafeToOutlineFrom(*MF, OutlineFromLinkOnceODRs))
       continue;
 
+    std::function<unsigned(MachineBasicBlock &)> getFlags =
+      [&] (MachineBasicBlock &MBB) {
+      return TII->getMachineOutlinerMBBFlags(MBB);
+    };
+
+    std::function<InstrType(MachineBasicBlock::iterator &, unsigned)> getInstrType =
+      [&] (MachineBasicBlock::iterator &It, unsigned Flags) {
+      return TII->getOutliningType(It, Flags);
+    };
+
     // We have a function suitable for outlining. Iterate over every
     // MachineBasicBlock in MF and try to map its instructions to a list of
     // unsigned integers.
@@ -986,7 +852,8 @@ bool MachineOutliner::runOnModule(Module &M) {
         continue;
 
       // MBB is suitable for outlining. Map it to a list of unsigneds.
-      Mapper.convertToUnsignedVec(MBB, *TII);
+      // Mapper.convertToUnsignedVec(MBB, *TII);
+      Mapper.convertToUnsignedVec(MBB, getFlags, getInstrType);
     }
   }
 

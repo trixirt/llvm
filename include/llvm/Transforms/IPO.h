@@ -211,6 +211,7 @@ ModulePass *createPartialInliningPass();
 /// functions.
 ///
 ModulePass *createCodeSizeOutlinerPass();
+ModulePass *createIROutlinerPass();
 
 //===----------------------------------------------------------------------===//
 /// createBarrierNoopPass - This pass is purely a module pass barrier in a pass

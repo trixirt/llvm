@@ -160,6 +160,10 @@ static cl::opt<bool> EnableEarlyCSO("enable-early-cso", cl::init(false),
 				    cl::Hidden, cl::ZeroOrMore,
 				    cl::desc("Enable early IR outlining"));
 
+static cl::opt<bool> EnableIRO("enable-ir-outliner", cl::init(false),
+				    cl::Hidden, cl::ZeroOrMore,
+				    cl::desc("Enable IR outlining"));
+
 PassManagerBuilder::PassManagerBuilder() {
     OptLevel = 2;
     SizeLevel = 0;
@@ -522,6 +526,9 @@ void PassManagerBuilder::populateModulePassManager(
   if (!PerformThinLTO && !PrepareForThinLTOUsingPGOSampleProfile)
     addPGOInstrPasses(MPM);
 
+  if (EnableIRO)
+    MPM.add(createIROutlinerPass());
+    
   // Add an early run of the code size outliner pass.
   if (EnableEarlyCSO && SizeLevel > 0) {
     MPM.add(createSeparateConstOffsetFromGEPPass());

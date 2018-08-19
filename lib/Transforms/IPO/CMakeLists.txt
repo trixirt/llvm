@@ -18,6 +18,7 @@ add_llvm_library(LLVMipo
   GlobalSplit.cpp
   IPConstantPropagation.cpp
   IPO.cpp
+  IROutliner.cpp
   InferFunctionAttrs.cpp
   InlineSimple.cpp
   Inliner.cpp
