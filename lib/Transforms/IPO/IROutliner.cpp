@@ -46,6 +46,18 @@ struct IROutliner : public ModulePass {
   /// strings from that tree.
   bool runOnModule(Module &M) override {
 
+    // A noop
+    std::function<unsigned(BasicBlock &)> getFlags =
+      [&] (BasicBlock &BB) {
+      return 0;
+    };
+    
+    std::function<InstrType(BasicBlock::iterator &, unsigned)> getInstrType =
+      [&] (BasicBlock::iterator &It, unsigned Flags) {
+      // stub
+      return InstrType::Legal;
+    };
+
     // Check if there's anything in the module. If it's empty, then there's
     // nothing to outline.
     if (M.empty())
@@ -62,22 +74,8 @@ struct IROutliner : public ModulePass {
       if (F.empty())
 	continue;
 
-      // A noop
-      std::function<unsigned(BasicBlock &)> getFlags =
-	[&] (BasicBlock &BB) {
-	return 0;
-      };
-
-      std::function<InstrType(BasicBlock::iterator &, unsigned)> getInstrType =
-	[&] (BasicBlock::iterator &It, unsigned Flags) {
-	// stub
-	return InstrType::Legal;
-      };
-
-
       for (BasicBlock &BB : F) {
-
-	//Mapper.convertToUnsignedVec(BB, getFlags, getInstrType);
+	Mapper.convertToUnsignedVec(BB, getFlags, getInstrType);
       }
     }
 

@@ -526,7 +526,7 @@ void PassManagerBuilder::populateModulePassManager(
   if (!PerformThinLTO && !PrepareForThinLTOUsingPGOSampleProfile)
     addPGOInstrPasses(MPM);
 
-  if (EnableIRO)
+  if (EnableIRO && SizeLevel > 0)
     MPM.add(createIROutlinerPass());
     
   // Add an early run of the code size outliner pass.
