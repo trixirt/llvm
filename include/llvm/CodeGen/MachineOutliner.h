@@ -77,86 +77,15 @@ namespace outliner {
   }
 };
 
-/// The information necessary to create an outlined function for some
-/// class of candidate.
-struct OutlinedFunction {
 
-private:
-  /// The number of candidates for this \p OutlinedFunction.
-  unsigned OccurrenceCount = 0;
-
-public:
-  std::vector<std::shared_ptr<Candidate>> Candidates;
-
-  /// The actual outlined function created.
-  /// This is initialized after we go through and create the actual function.
-  MachineFunction *MF = nullptr;
-
-  /// A number assigned to this function which appears at the end of its name.
-  unsigned Name;
-
-  /// The sequence of integers corresponding to the instructions in this
-  /// function.
-  std::vector<unsigned> Sequence;
-
-  /// Represents the size of a sequence in bytes. (Some instructions vary
-  /// widely in size, so just counting the instructions isn't very useful.)
-  unsigned SequenceSize;
-
-  /// Target-defined overhead of constructing a frame for this function.
-  unsigned FrameOverhead;
-
-  /// Target-defined identifier for constructing a frame for this function.
-  unsigned FrameConstructionID;
-
-  /// Return the number of candidates for this \p OutlinedFunction.
-  unsigned getOccurrenceCount() { return OccurrenceCount; }
-
-  /// Decrement the occurrence count of this OutlinedFunction and return the
-  /// new count.
-  unsigned decrement() {
-    assert(OccurrenceCount > 0 && "Can't decrement an empty function!");
-    OccurrenceCount--;
-    return getOccurrenceCount();
-  }
-
-  /// Return the number of bytes it would take to outline this
-  /// function.
-  unsigned getOutliningCost() {
-    unsigned CallOverhead = 0;
-    for (std::shared_ptr<Candidate> &C : Candidates)
-      CallOverhead += C->getCallOverhead();
-    return CallOverhead + SequenceSize + FrameOverhead;
-  }
-
-  /// Return the size in bytes of the unoutlined sequences.
-  unsigned getNotOutlinedCost() { return OccurrenceCount * SequenceSize; }
-
-  /// Return the number of instructions that would be saved by outlining
-  /// this function.
-  unsigned getBenefit() {
-    unsigned NotOutlinedCost = getNotOutlinedCost();
-    unsigned OutlinedCost = getOutliningCost();
-    return (NotOutlinedCost < OutlinedCost) ? 0
-                                            : NotOutlinedCost - OutlinedCost;
-  }
-
-  OutlinedFunction(std::vector<Candidate> &Cands,
-                   unsigned SequenceSize, unsigned FrameOverhead,
-                   unsigned FrameConstructionID)
-      : SequenceSize(SequenceSize), FrameOverhead(FrameOverhead),
-        FrameConstructionID(FrameConstructionID) {
-    OccurrenceCount = Cands.size();
-    for (Candidate &C : Cands)
-      Candidates.push_back(std::make_shared<outliner::Candidate>(C));
-
-    unsigned B = getBenefit();
-    for (std::shared_ptr<Candidate> &C : Candidates)
-      C->Benefit = B;
-  }
-
-  OutlinedFunction() {}
-};
+  struct OutlinedFunction : public OutlinedFunctionT<Candidate, MachineFunction> {
+      OutlinedFunction(std::vector<Candidate> &Cands,
+		       unsigned SequenceSize, unsigned FrameOverhead,
+		       unsigned FrameConstructionID)
+	: OutlinedFunctionT(Cands, SequenceSize, FrameOverhead,FrameConstructionID) {
+      }
+    OutlinedFunction() {}
+  };
 } // namespace outliner
 } // namespace llvm
 
