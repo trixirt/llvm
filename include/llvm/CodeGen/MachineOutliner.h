@@ -16,6 +16,7 @@
 #ifndef LLVM_MACHINEOUTLINER_H
 #define LLVM_MACHINEOUTLINER_H
 
+#include "llvm/CodeGen/CandidateT.h"
 #include "llvm/CodeGen/LiveRegUnits.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/TargetRegisterInfo.h"
@@ -24,41 +25,8 @@
 namespace llvm {
 namespace outliner {
 
-/// An individual sequence of instructions to be replaced with a call to
-/// an outlined function.
-struct Candidate {
-private:
-  /// The start index of this \p Candidate in the instruction list.
-  unsigned StartIdx;
-
-  /// The number of instructions in this \p Candidate.
-  unsigned Len;
-
-  // The first instruction in this \p Candidate.
-  MachineBasicBlock::iterator FirstInst;
-
-  // The last instruction in this \p Candidate.
-  MachineBasicBlock::iterator LastInst;
-
-  // The basic block that contains this Candidate.
-  MachineBasicBlock *MBB;
-
-  /// Cost of calling an outlined function from this point as defined by the
-  /// target.
-  unsigned CallOverhead;
-
-public:
-  /// The index of this \p Candidate's \p OutlinedFunction in the list of
-  /// \p OutlinedFunctions.
-  unsigned FunctionIdx;
-
-  /// Set to false if the candidate overlapped with another candidate.
-  bool InCandidateList = true;
-
-  /// Identifier denoting the instructions to emit to call an outlined function
-  /// from this point. Defined by the target.
-  unsigned CallConstructionID;
-
+  struct Candidate : public CandidateT<MachineBasicBlock> {
+  public:
   /// Contains physical register liveness information for the MBB containing
   /// this \p Candidate.
   ///
@@ -73,68 +41,32 @@ public:
   /// been used across the sequence.
   LiveRegUnits UsedInSequence;
 
-  /// Return the number of instructions in this Candidate.
-  unsigned getLength() const { return Len; }
-
-  /// Return the start index of this candidate.
-  unsigned getStartIdx() const { return StartIdx; }
-
-  /// Return the end index of this candidate.
-  unsigned getEndIdx() const { return StartIdx + Len - 1; }
-
-  /// Set the CallConstructionID and CallOverhead of this candidate to CID and
-  /// CO respectively.
-  void setCallInfo(unsigned CID, unsigned CO) {
-    CallConstructionID = CID;
-    CallOverhead = CO;
-  }
-
-  /// Returns the call overhead of this candidate if it is in the list.
-  unsigned getCallOverhead() const {
-    return InCandidateList ? CallOverhead : 0;
-  }
-
-  MachineBasicBlock::iterator &front() { return FirstInst; }
-  MachineBasicBlock::iterator &back() { return LastInst; }
-  MachineFunction *getMF() const { return MBB->getParent(); }
-  MachineBasicBlock *getMBB() const { return MBB; }
-
-  /// The number of instructions that would be saved by outlining every
-  /// candidate of this type.
-  ///
-  /// This is a fixed value which is not updated during the candidate pruning
-  /// process. It is only used for deciding which candidate to keep if two
-  /// candidates overlap. The true benefit is stored in the OutlinedFunction
-  /// for some given candidate.
-  unsigned Benefit = 0;
-
   Candidate(unsigned StartIdx, unsigned Len,
             MachineBasicBlock::iterator &FirstInst,
             MachineBasicBlock::iterator &LastInst, MachineBasicBlock *MBB,
             unsigned FunctionIdx)
-      : StartIdx(StartIdx), Len(Len), FirstInst(FirstInst), LastInst(LastInst),
-        MBB(MBB), FunctionIdx(FunctionIdx) {}
+    : CandidateT<MachineBasicBlock>(StartIdx, Len, FirstInst, LastInst, MBB, FunctionIdx) {}
   Candidate() {}
 
-  /// Used to ensure that \p Candidates are outlined in an order that
-  /// preserves the start and end indices of other \p Candidates.
-  bool operator<(const Candidate &RHS) const {
-    return getStartIdx() > RHS.getStartIdx();
-  }
+    MachineFunction *getMF() const {
+      return getB()->getParent();
+    }
 
   /// Compute the registers that are live across this Candidate.
   /// Used by targets that need this information for cost model calculation.
   /// If a target does not need this information, then this should not be
   /// called.
   void initLRU(const TargetRegisterInfo &TRI) {
-    assert(MBB->getParent()->getRegInfo().tracksLiveness() &&
+    auto BaseMBB = getB();
+    
+    assert(BaseMBB->getParent()->getRegInfo().tracksLiveness() &&
            "Candidate's Machine Function must track liveness");
     LRU.init(TRI);
-    LRU.addLiveOuts(*MBB);
+    LRU.addLiveOuts(*BaseMBB);
 
     // Compute liveness from the end of the block up to the beginning of the
     // outlining candidate.
-    std::for_each(MBB->rbegin(), (MachineBasicBlock::reverse_iterator)front(),
+    std::for_each(BaseMBB->rbegin(), (MachineBasicBlock::reverse_iterator)front(),
                   [this](MachineInstr &MI) { LRU.stepBackward(MI); });
 
     // Walk over the sequence itself and figure out which registers were used

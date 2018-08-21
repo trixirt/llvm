@@ -270,7 +270,7 @@ void MachineOutliner::emitNotOutliningCheaperRemark(
   MachineOptimizationRemarkEmitter MORE(*(C.getMF()), nullptr);
   MORE.emit([&]() {
     MachineOptimizationRemarkMissed R(DEBUG_TYPE, "NotOutliningCheaper",
-                                      C.front()->getDebugLoc(), C.getMBB());
+                                      C.front()->getDebugLoc(), C.getB());
     R << "Did not outline " << NV("Length", StringLen) << " instructions"
       << " from " << NV("NumOccurrences", CandidatesForRepeatedSeq.size())
       << " locations."
@@ -715,11 +715,11 @@ bool MachineOutliner::outline(
     }
 
     MachineFunction *MF = OF.MF;
-    MachineBasicBlock &MBB = *C.getMBB();
+    MachineBasicBlock &MBB = *C.getB();
     MachineBasicBlock::iterator StartIt = C.front();
     MachineBasicBlock::iterator EndIt = C.back();
-    assert(StartIt != C.getMBB()->end() && "StartIt out of bounds!");
-    assert(EndIt != C.getMBB()->end() && "EndIt out of bounds!");
+    assert(StartIt != C.getB()->end() && "StartIt out of bounds!");
+    assert(EndIt != C.getB()->end() && "EndIt out of bounds!");
 
     const TargetSubtargetInfo &STI = MF->getSubtarget();
     const TargetInstrInfo &TII = *STI.getInstrInfo();

@@ -13,6 +13,8 @@
 #ifndef LLVM_ADT_SUFFIXTREE_H
 #define LLVM_ADT_SUFFIXTREE_H
 
+#include "llvm/ADT/DenseMap.h"
+
 using namespace llvm;
 
 /// Represents an undefined index in the suffix tree.

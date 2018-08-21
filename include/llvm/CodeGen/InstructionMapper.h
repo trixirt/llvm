@@ -65,14 +65,7 @@ struct InstructionMapper {
     InstrList.push_back(It);
     INSTR &MI = *It;
     bool WasInserted;
-    // DenseMap<MachineInstr *, unsigned, MachineInstrExpressionTrait>::iterator
     typename InstructionIntegerMapType::iterator ResultIt;
-    // using exprTrait = MachineInstrExpressionTrait;
-    // using exprTrait = InstrExpressionTrait<INSTR>;
-    // using key = MachineInstr *;
-    // template<typename T> using key = typename T *;
-    // DenseMap<key<typename INSTR>, unsigned, exprTrait>::iterator
-    //    ResultIt;
     std::tie(ResultIt, WasInserted) =
         InstructionIntegerMap.insert(std::make_pair(&MI, LegalInstrNumber));
     unsigned MINumber = ResultIt->second;
@@ -129,16 +122,16 @@ struct InstructionMapper {
   /// unique integer. The resulting mapping is placed into a suffix tree and
   /// queried for candidates.
   ///
-  /// \param MBB The \p BLOCK to be translated into integers.
-  /// \param TII \p TargetInstrInfo for the function.
+  /// \param B The \p BLOCK to be translated into integers.
+  /// \param getFlags a function to get per-block flag
+  /// \param getInstrType a function to get per-instruction type
   void convertToUnsignedVec(
-      BLOCK &MBB, std::function<unsigned(BLOCK &)> getFlags,
+      BLOCK &B, std::function<unsigned(BLOCK &)> getFlags,
       std::function<InstrType(typename BLOCK::iterator &, unsigned)>
           getInstrType) {
-    // unsigned Flags = TII.getMachineOutlinerMBBFlags(MBB);
-    unsigned Flags = getFlags(MBB);
+    unsigned Flags = getFlags(B);
 
-    for (auto It = MBB.begin(), Et = MBB.end(); It != Et; It++) {
+    for (auto It = B.begin(), Et = B.end(); It != Et; It++) {
 
       // Keep track of where this instruction is in the module.
       switch (getInstrType(It, Flags)) {
@@ -166,7 +159,7 @@ struct InstructionMapper {
     // "string". This makes sure we won't match across basic block or function
     // boundaries since the "end" is encoded uniquely and thus appears in no
     // repeated substring.
-    InstrList.push_back(MBB.end());
+    InstrList.push_back(B.end());
     UnsignedVec.push_back(IllegalInstrNumber);
     IllegalInstrNumber--;
   }
