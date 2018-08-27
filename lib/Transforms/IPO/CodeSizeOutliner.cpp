@@ -576,7 +576,7 @@ struct FunctionSplicer {
         DebugLoc DL = InitII->getDebugLoc();
         if (DL && DL != CurII->getDebugLoc())
           InitII->setDebugLoc(DebugLoc());
-        combineMetadata(InitII, CurII, KnownIDs);
+        combineMetadata(InitII, CurII, KnownIDs, true);
       }
 
       // Merge function attribute data.
