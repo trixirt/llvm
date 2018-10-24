@@ -5,6 +5,7 @@ add_llvm_library(LLVMipo
   BlockExtractor.cpp
   CalledValuePropagation.cpp
   ConstantMerge.cpp
+  CodeSizeOutliner.cpp
   CrossDSOCFI.cpp
   DeadArgumentElimination.cpp
   ElimAvailExtern.cpp

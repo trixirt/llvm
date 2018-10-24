@@ -152,6 +152,14 @@ static cl::opt<bool> EnableGVNSink(
     "enable-gvn-sink", cl::init(false), cl::Hidden,
     cl::desc("Enable the GVN sinking pass (default = off)"));
 
+static cl::opt<bool> EnableCSO(
+  "enable-cso", cl::init(false), cl::Hidden,
+  cl::desc("Enable outlining for code size (default = off)"));
+
+static cl::opt<bool> EnableEarlyCSO(
+  "enable-early-cso", cl::init(false), cl::Hidden,
+  cl::desc("Enable an early run of the code size outliner pass (default = off)"));
+
 PassManagerBuilder::PassManagerBuilder() {
     OptLevel = 2;
     SizeLevel = 0;
@@ -514,6 +522,13 @@ void PassManagerBuilder::populateModulePassManager(
   if (!PerformThinLTO && !PrepareForThinLTOUsingPGOSampleProfile)
     addPGOInstrPasses(MPM);
 
+  // Add an early run of the code size outliner pass.
+  if (EnableEarlyCSO && SizeLevel > 0) {
+    MPM.add(createSeparateConstOffsetFromGEPPass());
+    MPM.add(createCodeSizeOutlinerPass());
+    MPM.add(createPostOrderFunctionAttrsLegacyPass());
+  }
+
   // We add a module alias analysis pass here. In part due to bugs in the
   // analysis infrastructure this "works" in that the analysis stays alive
   // for the entire SCC pass run below.
@@ -706,6 +721,13 @@ void PassManagerBuilder::populateModulePassManager(
     MPM.add(createConstantMergePass());     // Merge dup global constants
   }
 
+  // Add a late run of the code size outliner pass.
+  if (EnableCSO && SizeLevel > 0) {
+    MPM.add(createCodeSizeOutlinerPass());
+    MPM.add(createTailCallEliminationPass());
+    MPM.add(createPostOrderFunctionAttrsLegacyPass());
+  }
+
   if (MergeFunctions)
     MPM.add(createMergeFunctionsPass());
 
@@ -885,6 +907,9 @@ void PassManagerBuilder::addLTOOptimizationPasses(legacy::PassManagerBase &PM) {
 
 void PassManagerBuilder::addLateLTOOptimizationPasses(
     legacy::PassManagerBase &PM) {
+  // Add a late run of the code size outliner pass.
+  PM.add(createCodeSizeOutlinerPass());
+
   // Delete basic blocks, which optimization passes may have killed.
   PM.add(createCFGSimplificationPass());
 
