@@ -79,6 +79,7 @@
 #include "llvm/Transforms/IPO/InferFunctionAttrs.h"
 #include "llvm/Transforms/IPO/Inliner.h"
 #include "llvm/Transforms/IPO/Internalize.h"
+#include "llvm/Transforms/IPO/IROutliner.h"
 #include "llvm/Transforms/IPO/LowerTypeTests.h"
 #include "llvm/Transforms/IPO/PartialInlining.h"
 #include "llvm/Transforms/IPO/SCCP.h"
@@ -201,6 +202,14 @@ static cl::opt<bool> EnableSyntheticCounts(
     "enable-npm-synthetic-counts", cl::init(false), cl::Hidden, cl::ZeroOrMore,
     cl::desc("Run synthetic function entry count generation "
              "pass"));
+
+static cl::opt<bool> EnableEarlyIROutliner(
+    "enable-npm-early-ir-outliner", cl::init(false), cl::Hidden,
+    cl::desc("Enable an early run of the ir outlining pass for the new PM (default = off)"));
+
+static cl::opt<bool> EnableIROutliner(
+    "enable-npm-ir-outliner", cl::init(false), cl::Hidden,
+    cl::desc("Enable the ir outlining pass for the new PM (default = off)"));
 
 static Regex DefaultAliasRegex(
     "^(default|thinlto-pre-link|thinlto|lto-pre-link|lto)<(O[0123sz])>$");
@@ -710,6 +719,10 @@ PassBuilder::buildModuleSimplificationPipeline(OptimizationLevel Level,
   if (EnableHotColdSplit && Phase != ThinLTOPhase::PostLink)
     MPM.addPass(HotColdSplittingPass());
 
+  // Add an early code size outlining pass.
+  if (EnableEarlyIROutliner && isOptimizingForSize(Level))
+    MPM.addPass(IROutlinerPass());
+
   // Require the GlobalsAA analysis for the module so we can query it within
   // the CGSCC pipeline.
   MPM.addPass(RequireAnalysisPass<GlobalsAA, Module>());
@@ -909,6 +922,10 @@ PassBuilder::buildModuleOptimizationPipeline(OptimizationLevel Level,
   MPM.addPass(createModuleToFunctionPassAdaptor(std::move(OptimizePM)));
 
   MPM.addPass(CGProfilePass());
+
+  // Add the late ir outlining pass.
+  if(EnableIROutliner && isOptimizingForSize(Level))
+    MPM.addPass(IROutlinerPass());
 
   // Now we need to do some global optimization transforms.
   // FIXME: It would seem like these should come first in the optimization

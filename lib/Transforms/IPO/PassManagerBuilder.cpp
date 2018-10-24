@@ -154,6 +154,14 @@ cl::opt<bool> FlattenedProfileUsed(
     cl::desc("Indicate the sample profile being used is flattened, i.e., "
              "no inline hierachy exists in the profile. "));
 
+static cl::opt<bool> EnableIROutliner(
+  "enable-ir-outliner", cl::init(false), cl::Hidden,
+  cl::desc("Enable ir outlining (default = off)"));
+
+static cl::opt<bool> EnableEarlyIROutliner(
+  "enable-early-ir-outliner", cl::init(false), cl::Hidden,
+  cl::desc("Enable an early run of the ir outliner pass (default = off)"));
+
 PassManagerBuilder::PassManagerBuilder() {
     OptLevel = 2;
     SizeLevel = 0;
@@ -534,6 +542,13 @@ void PassManagerBuilder::populateModulePassManager(
   if (EnableHotColdSplit && DefaultOrPreLinkPipeline)
     MPM.add(createHotColdSplittingPass());
 
+  // Add an early run of the ir outliner pass.
+  if (EnableEarlyIROutliner && SizeLevel > 0) {
+    MPM.add(createSeparateConstOffsetFromGEPPass());
+    MPM.add(createIROutlinerPass());
+    MPM.add(createPostOrderFunctionAttrsLegacyPass());
+  }
+
   // We add a module alias analysis pass here. In part due to bugs in the
   // analysis infrastructure this "works" in that the analysis stays alive
   // for the entire SCC pass run below.
@@ -730,6 +745,13 @@ void PassManagerBuilder::populateModulePassManager(
     MPM.add(createConstantMergePass());     // Merge dup global constants
   }
 
+  // Add a late run of the ir outliner pass.
+  if (EnableIROutliner && SizeLevel > 0) {
+    MPM.add(createIROutlinerPass());
+    MPM.add(createTailCallEliminationPass());
+    MPM.add(createPostOrderFunctionAttrsLegacyPass());
+  }
+
   if (MergeFunctions)
     MPM.add(createMergeFunctionsPass());
 
@@ -918,6 +940,9 @@ void PassManagerBuilder::addLTOOptimizationPasses(legacy::PassManagerBase &PM) {
 
 void PassManagerBuilder::addLateLTOOptimizationPasses(
     legacy::PassManagerBase &PM) {
+  // Add a late run of the ir outliner pass.
+  PM.add(createIROutlinerPass());
+
   // Delete basic blocks, which optimization passes may have killed.
   PM.add(createCFGSimplificationPass());
 
