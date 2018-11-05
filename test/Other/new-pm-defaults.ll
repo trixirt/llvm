@@ -252,6 +252,8 @@
 ; CHECK-O-NEXT: Running pass: SpeculateAroundPHIsPass
 ; CHECK-O-NEXT: Finished llvm::Function pass manager run.
 ; CHECK-O-NEXT: Running pass: CGProfilePass
+; CHECK-Os-NEXT: Running pass: CodeSizeOutlinerPass
+; CHECK-Oz-NEXT: Running pass: CodeSizeOutlinerPass
 ; CHECK-O-NEXT: Running pass: GlobalDCEPass
 ; CHECK-O-NEXT: Running pass: ConstantMergePass
 ; CHECK-O-NEXT: Finished llvm::Module pass manager run.
