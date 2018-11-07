@@ -1,5 +1,4 @@
-//===- Outliner.h - A generic outlining utility interface around the Utils lib
-//------===//
+//===- Outliner.h - A generic outlining utility interface -------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -57,12 +56,12 @@ struct OutlineCandidate {
   bool isValid() const { return Benefit != 0; }
   // Set this candidate as not profitable.
   void invalidate() { Benefit = 0; }
-  // Get the candidate at index /p Idx.
+  // Get the candidate at index Idx.
   unsigned getOccurrence(size_t Idx) const {
     assert(Idx < size() && "Invalid occurrence index.");
     return Occurrences[Idx];
   }
-  // Remove the occurrence at index /p Idx
+  // Remove the occurrence at index Idx
   void removeOccurrence(size_t Idx) {
     Occurrences[Idx] = Occurrences.back();
     Occurrences.pop_back();
@@ -74,10 +73,10 @@ struct OutlineCandidate {
   OutlineCandidate(unsigned ID, unsigned Len) : ID(ID), Len(Len) {}
 };
 
-std::vector<OutlineCandidate> findSequentialOutliningCandidates(
+bool findSequentialOutliningCandidates(
     function_ref<bool(ArrayRef<unsigned>, unsigned)> PrePruneFn,
     std::vector<unsigned> &Vec, unsigned MinInstructionLen,
-    unsigned MinOccurrences);
+    unsigned MinOccurrences, std::vector<OutlineCandidate> &CL);
 
 bool pruneSequentialOutlineCandidateList(MutableArrayRef<OutlineCandidate> CL,
                                          unsigned NumMappedInstructions);
@@ -85,7 +84,7 @@ bool pruneSequentialOutlineCandidateList(MutableArrayRef<OutlineCandidate> CL,
 /// \brief Helper struct containing mapping information for a module.
 class OutlinerMapper {
 public:
-  // Get the instruction at index /p Idx.
+  // Get the instruction at index Idx.
   template <typename InstrTy> InstrTy *getInstr(unsigned Idx) {
     return (InstrTy *)InstrVec[Idx];
   }

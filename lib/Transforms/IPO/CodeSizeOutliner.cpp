@@ -2164,9 +2164,9 @@ bool runImpl(Module &M, ProfileSummaryInfo *PSI,
       };
 
   // Find outlining candidates.
-  std::vector<OutlineCandidate> CL = findSequentialOutliningCandidates(
-      PrePruneFn, CCVec, MinInstructionLength, MinOccurrences);
-  if (CL.empty())
+  std::vector<OutlineCandidate> CL;
+  if (!findSequentialOutliningCandidates(
+    PrePruneFn, CCVec, MinInstructionLength, MinOccurrences, CL))
     return false;
 
   // Analyze candidate profitability.

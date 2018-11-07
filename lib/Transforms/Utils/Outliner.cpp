@@ -1,4 +1,4 @@
-//===- Outliner.cpp - Generic outliner interface -----------===//
+//===- Outliner.cpp - Generic outliner interface --------------------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -217,11 +217,11 @@ static std::vector<int> computeLCP(ArrayRef<unsigned> S, ArrayRef<int> SA) {
 } // namespace
 
 // Candidate Selection.
-std::vector<OutlineCandidate> llvm::findSequentialOutliningCandidates(
+bool llvm::findSequentialOutliningCandidates(
     function_ref<bool(ArrayRef<unsigned>, unsigned)> PrePruneFn,
     std::vector<unsigned> &Vec, unsigned MinInstructionLen,
-    unsigned MinOccurrences) {
-  std::vector<OutlineCandidate> CL;
+    unsigned MinOccurrences, std::vector<OutlineCandidate> &CL) {
+  CL.clear();
 
   // Build the suffix array and longest common prefix array.
   std::vector<int> SuffixArr = SuffixArray::compute(Vec);
@@ -345,7 +345,7 @@ std::vector<OutlineCandidate> llvm::findSequentialOutliningCandidates(
       CandidateInterval.reset(Idx, Idx + LastValidSize);
     PrevSize = OrigSize;
   }
-  return CL;
+  return !CL.empty();
 }
 
 // Candidate Pruning.
