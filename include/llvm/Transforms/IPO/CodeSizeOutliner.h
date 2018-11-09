@@ -1,5 +1,4 @@
-//===-- CodeSizeOutliner.h - DCE unreachable internal functions
-//------------------===//
+//===-- CodeSizeOutliner.h - Base class for the IRO pass ------------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -8,8 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This transform outlines congruent chains of instructions from the current
-//   module.
+// Generates functions by collecting a module's common IR sequences.
 //
 //===----------------------------------------------------------------------===//
 
@@ -20,7 +18,6 @@
 #include "llvm/IR/PassManager.h"
 
 namespace llvm {
-/// Pass to remove unused function declarations.
 class CodeSizeOutlinerPass : public PassInfoMixin<CodeSizeOutlinerPass> {
 public:
   PreservedAnalyses run(Module &M, ModuleAnalysisManager &);
