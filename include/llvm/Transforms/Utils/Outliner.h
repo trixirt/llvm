@@ -24,7 +24,7 @@ class BlockFrequencyInfo;
 class ProfileSummaryInfo;
 
 /// \brief A potential candidate to be outlined.
-struct OutlineCandidate {
+struct Candidate {
   /// A unique ID for this outline candidate.
   unsigned ID;
 
@@ -67,19 +67,19 @@ struct OutlineCandidate {
     Occurrences.pop_back();
   }
 
-  OutlineCandidate(unsigned ID, unsigned Len,
-                   std::vector<unsigned> &Occurrences)
+  Candidate(unsigned ID, unsigned Len,
+	    std::vector<unsigned> &Occurrences)
       : ID(ID), Len(Len), Occurrences(Occurrences) {}
-  OutlineCandidate(unsigned ID, unsigned Len) : ID(ID), Len(Len) {}
+  Candidate(unsigned ID, unsigned Len) : ID(ID), Len(Len) {}
 };
 
-bool findSequentialOutliningCandidates(
+bool findSequentialCandidates(
     function_ref<bool(ArrayRef<unsigned>, unsigned)> PrePruneFn,
     std::vector<unsigned> &Vec, unsigned MinInstructionLen,
-    unsigned MinOccurrences, std::vector<OutlineCandidate> &CL);
+    unsigned MinOccurrences, std::vector<Candidate> &CL);
 
-bool pruneSequentialOutlineCandidateList(MutableArrayRef<OutlineCandidate> CL,
-                                         unsigned NumMappedInstructions);
+bool pruneSequentialCandidateList(MutableArrayRef<Candidate> CL,
+                                  unsigned NumMappedInstructions);
 
 /// \brief Helper struct containing mapping information for a module.
 class OutlinerMapper {

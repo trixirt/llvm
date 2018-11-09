@@ -217,10 +217,10 @@ static std::vector<int> computeLCP(ArrayRef<unsigned> S, ArrayRef<int> SA) {
 } // namespace
 
 // Candidate Selection.
-bool llvm::findSequentialOutliningCandidates(
+bool llvm::findSequentialCandidates(
     function_ref<bool(ArrayRef<unsigned>, unsigned)> PrePruneFn,
     std::vector<unsigned> &Vec, unsigned MinInstructionLen,
-    unsigned MinOccurrences, std::vector<OutlineCandidate> &CL) {
+    unsigned MinOccurrences, std::vector<Candidate> &CL) {
   CL.clear();
 
   // Build the suffix array and longest common prefix array.
@@ -349,15 +349,15 @@ bool llvm::findSequentialOutliningCandidates(
 }
 
 // Candidate Pruning.
-bool llvm::pruneSequentialOutlineCandidateList(
-    MutableArrayRef<OutlineCandidate> CL, unsigned NumMappedInstructions) {
+bool llvm::pruneSequentialCandidateList(
+    MutableArrayRef<Candidate> CL, unsigned NumMappedInstructions) {
   // Helper comparator for candidate indexes.
   struct Comparator {
-    Comparator(ArrayRef<OutlineCandidate> CL) : CL(CL) {}
+    Comparator(ArrayRef<Candidate> CL) : CL(CL) {}
     bool operator()(unsigned L, unsigned R) {
       return CL[L].Benefit < CL[R].Benefit;
     }
-    ArrayRef<OutlineCandidate> CL;
+    ArrayRef<Candidate> CL;
   };
 
   // Build a priority worklist for the valid candidates.
@@ -381,25 +381,25 @@ bool llvm::pruneSequentialOutlineCandidateList(
     // Get the next most benefical candidate.
     unsigned CandIdx = MostBenefitial.top();
     MostBenefitial.pop();
-    OutlineCandidate &OC = CL[CandIdx];
+    Candidate &C = CL[CandIdx];
 
     // Check overlaps.
     bool PrunedAnOccurrence = false;
-    for (ssize_t i = OC.size() - 1; i >= 0; --i) {
-      unsigned Occur = OC.getOccurrence(i);
-      if (InsertedOccurrences.find_first_in(Occur, Occur + OC.Len) == -1)
+    for (ssize_t i = C.size() - 1; i >= 0; --i) {
+      unsigned Occur = C.getOccurrence(i);
+      if (InsertedOccurrences.find_first_in(Occur, Occur + C.Len) == -1)
         continue;
-      if (OC.Benefit < OC.BenefitPerOccur) {
-        OC.invalidate();
+      if (C.Benefit < C.BenefitPerOccur) {
+        C.invalidate();
         break;
       }
-      OC.Benefit -= OC.BenefitPerOccur;
-      OC.removeOccurrence(i);
+      C.Benefit -= C.BenefitPerOccur;
+      C.removeOccurrence(i);
       PrunedAnOccurrence = true;
     }
 
     // Add valid occurrences if this candidate is still profitable.
-    if (!OC.isValid())
+    if (!C.isValid())
       continue;
 
     // If we pruned an occurrences, we readd the candidate
@@ -410,8 +410,8 @@ bool llvm::pruneSequentialOutlineCandidateList(
     }
 
     // Tag our valid occurrences.
-    for (unsigned Occur : OC)
-      InsertedOccurrences.set(Occur, Occur + OC.Len);
+    for (unsigned Occur : C)
+      InsertedOccurrences.set(Occur, Occur + C.Len);
     HasProfitableCandidate = true;
   }
   return HasProfitableCandidate;

@@ -103,7 +103,7 @@ struct ConstantCondenseInstance {
 };
 
 /// \brief Information necessary for outlining specific to IR outlining.
-struct AdditionalCandidateData {
+struct CandidateData {
   /// Inputs into this candidate : Vector<Instr Index, Op#>.
   std::vector<Input> InputSeq;
 
@@ -265,8 +265,8 @@ public:
   ///
 
   // Get the data attached to the provided candidate.
-  AdditionalCandidateData &getCandidateData(const OutlineCandidate &OC) {
-    return *OutlineCandData[OC.ID];
+  CandidateData &getCandidateData(const Candidate &C) {
+    return *OutlineCandData[C.ID];
   }
   // Create candidate data.
   void createCandidateData(size_t Count) {
@@ -274,7 +274,7 @@ public:
     OutlineCandData.reserve(NewSize);
     for (size_t i = 0; i < Count; ++i)
       OutlineCandData.emplace_back(new (DataAlloc.Allocate())
-                                       AdditionalCandidateData());
+                                       CandidateData());
   }
 
   void initAdditionalData() {
@@ -436,8 +436,8 @@ private:
   SpecificBumpPtrAllocator<InstructionInfo> InfoAllocator;
 
   /// Stores extra candidate data.
-  std::vector<AdditionalCandidateData *> OutlineCandData;
-  SpecificBumpPtrAllocator<AdditionalCandidateData> DataAlloc;
+  std::vector<CandidateData *> OutlineCandData;
+  SpecificBumpPtrAllocator<CandidateData> DataAlloc;
 };
 
 /// \brief A specific instance of an outlined candidate.
@@ -462,25 +462,25 @@ struct FunctionSplicer {
   }
 
   // Reset the outliner to prepare for a new instance.
-  void prepareForNewCandidate(const OutlineCandidate &OC,
+  void prepareForNewCandidate(const Candidate &C,
                               IROutlinerMapper &OM) {
     OutlinedFn = nullptr;
-    InitialStartIdx = *OC.begin();
-    AdditionalCandidateData &Data = OM.getCandidateData(OC);
+    InitialStartIdx = *C.begin();
+    CandidateData &CD = OM.getCandidateData(C);
 
     // Handle output type.
     LLVMContext &Ctx = OM.getInstr(InitialStartIdx)->getContext();
-    unsigned NumOutputs = Data.Outputs.count();
+    unsigned NumOutputs = CD.Outputs.count();
     if (NumOutputs == 0)
       OutputType = Type::getVoidTy(Ctx);
     else if (NumOutputs == 1) {
       Instruction *OnlyOut =
-          OM.getInstr(InitialStartIdx + Data.Outputs.find_first());
+          OM.getInstr(InitialStartIdx + CD.Outputs.find_first());
       OutputType = OnlyOut->getType();
     } else {
       // Collect information about the outputs of this new candidate.
       SmallVector<Type *, 8> OutputTypes;
-      for (size_t OutputIdx : Data.Outputs) {
+      for (size_t OutputIdx : CD.Outputs) {
         Type *OutTy = OM.getInstr(InitialStartIdx + OutputIdx)->getType();
         OutputTypes.push_back(OutTy);
       }
@@ -491,13 +491,13 @@ struct FunctionSplicer {
   }
 
   // Outline a new occurrence of an outline chain.
-  void outlineOccurrence(const OutlineCandidate &OC, unsigned StartIdx,
+  void outlineOccurrence(const Candidate &C, unsigned StartIdx,
                          IROutlinerMapper &OM) {
     ++NumOccurrencesOutlined;
-    Instruction *Tail = OM.getInstr(StartIdx + (OC.Len - 1));
+    Instruction *Tail = OM.getInstr(StartIdx + (C.Len - 1));
     Function *ParentFn = Tail->getFunction();
     bool InitialOccur = !OutlinedFn;
-    AdditionalCandidateData &Data = OM.getCandidateData(OC);
+    CandidateData &CD = OM.getCandidateData(C);
 
     /// Split the outline chain into its own block.
     Instruction *Head = OM.getInstr(StartIdx);
@@ -519,12 +519,12 @@ struct FunctionSplicer {
         BasicBlock::Create(ParentFn->getContext(), "cso.patch", ParentFn);
 
     // Create parameter vec for the new call.
-    unsigned NumOutputs = Data.Outputs.count();
+    unsigned NumOutputs = CD.Outputs.count();
     std::vector<Value *> Args;
-    Args.reserve(Data.InputSeq.size());
+    Args.reserve(CD.InputSeq.size());
 
     // Build inputs/outputs in order.
-    for (Input &I : Data.InputSeq)
+    for (Input &I : CD.InputSeq)
       Args.push_back(OM.getInstrOp(StartIdx + I.InstrNo, I.OpNo));
 
     // Replace branches to entry block.
@@ -554,7 +554,7 @@ struct FunctionSplicer {
 
       // Merge special state.
       for (unsigned InitI = InitialStartIdx, CurI = StartIdx,
-                    InitE = InitialStartIdx + OC.Len;
+                    InitE = InitialStartIdx + C.Len;
            InitI < InitE; ++InitI, ++CurI) {
         Instruction *InitII = OM.getInstr(InitI);
         Instruction *CurII = OM.getInstr(CurI);
@@ -598,7 +598,7 @@ struct FunctionSplicer {
 
       // Otherwise we outline the initial occurrence.
     } else
-      outlineInitialOccurrence(OC, OM, StartIdx, Args, EntryBlock);
+      outlineInitialOccurrence(C, OM, StartIdx, Args, EntryBlock);
 
     // Create the patchup for the outline section.
     Instruction *PatchupI;
@@ -620,11 +620,11 @@ struct FunctionSplicer {
 
     // Replace uses of outputs and create reloads.
     if (NumOutputs == 1) {
-      Instruction *OnlyOut = OM.getInstr(StartIdx + Data.Outputs.find_first());
+      Instruction *OnlyOut = OM.getInstr(StartIdx + CD.Outputs.find_first());
       OnlyOut->replaceUsesOutsideBlock(PatchupI, EntryBlock);
     } else if (NumOutputs != 0) {
       unsigned OutputNum = 0;
-      for (size_t OutputIdx : Data.Outputs) {
+      for (size_t OutputIdx : CD.Outputs) {
         Instruction *Out = OM.getInstr(StartIdx + OutputIdx);
         Value *Reload =
             ExtractValueInst::Create(PatchupI, OutputNum++, "", OutlineBlock);
@@ -642,10 +642,10 @@ struct FunctionSplicer {
   }
 
   // \brief Finalize this function as an outline instance.
-  void finalize(const OutlineCandidate &OC, IROutlinerMapper &OM) {
+  void finalize(const Candidate &C, IROutlinerMapper &OM) {
     // Check to see if our tail is an invoke instruction. If so then we
     // transform it into a call.
-    Instruction *Tail = OM.getInstr(InitialStartIdx + OC.Len - 1);
+    Instruction *Tail = OM.getInstr(InitialStartIdx + C.Len - 1);
     if (InvokeInst *II = dyn_cast<InvokeInst>(Tail)) {
       SmallVector<Value *, 8> IIArgs(II->arg_operands());
       SmallVector<OperandBundleDef, 2> Bundles;
@@ -661,18 +661,18 @@ struct FunctionSplicer {
     }
 
     // Re-unique the inputs to the function.
-    uniqueInputs(OM.getCandidateData(OC));
+    uniqueInputs(OM.getCandidateData(C));
 
     // Set the final function name.
     OutlinedFn->setName(Twine("cso_") + Twine(NumOutlined++));
 
     // Debug.
     DEBUG(dbgs() << "** Outlining : " << OutlinedFn->getName() << "\n"
-                 << " Candidate : " << OC.ID << "\n"
-                 << " occurrences : " << OC.size() << "\n"
-                 << " size : " << OC.Len << "\n"
-                 << " benefit : " << OC.Benefit << "\n"
-                 << " benefit per occurrence : " << OC.BenefitPerOccur << "\n");
+                 << " Candidate : " << C.ID << "\n"
+                 << " occurrences : " << C.size() << "\n"
+                 << " size : " << C.Len << "\n"
+                 << " benefit : " << C.Benefit << "\n"
+                 << " benefit per occurrence : " << C.BenefitPerOccur << "\n");
   }
 
 private:
@@ -683,7 +683,7 @@ private:
   // call 2: outlinedFn(b, b);
   // We identify that parameters 1 and 2 are the same
   //  for each callsite, so we condense them.
-  void uniqueInputs(AdditionalCandidateData &Data) {
+  void uniqueInputs(CandidateData &CD) {
     FunctionType *CurFnTy = OutlinedFn->getFunctionType();
     unsigned NumInputs = CurFnTy->getNumParams();
 
@@ -833,7 +833,7 @@ private:
   }
 
   // \brief Outline the initial occurrence of this chain.
-  void outlineInitialOccurrence(const OutlineCandidate &OC,
+  void outlineInitialOccurrence(const Candidate &C,
                                 IROutlinerMapper &OM, size_t StartIdx,
                                 ArrayRef<Value *> Args, BasicBlock *Entry) {
     Function *ParentFn = Entry->getParent();
@@ -864,7 +864,7 @@ private:
     OutlinedFn->addAttributes(AttributeList::FunctionIndex, AttrsToAdd);
 
     // Drop any uses of the outlined instructions as metadata.
-    for (unsigned InitI = StartIdx, InitE = StartIdx + OC.Len; InitI < InitE;
+    for (unsigned InitI = StartIdx, InitE = StartIdx + C.Len; InitI < InitE;
          ++InitI) {
       Instruction *InitII = OM.getInstr(InitI);
       if (InitII->isUsedByMetadata())
@@ -876,7 +876,7 @@ private:
     if (EmitProfileData)
       OutlinedFn->addFnAttr(Attribute::Cold);
 
-    AdditionalCandidateData &Data = OM.getCandidateData(OC);
+    CandidateData &CD = OM.getCandidateData(C);
 
     // Erase the current terminator if we don't have an invoke.
     Instruction *CurTerm = Entry->getTerminator();
@@ -885,13 +885,13 @@ private:
 
     /// Create stores for any output variables.
     Value *RetVal = nullptr;
-    unsigned NumOutputs = Data.Outputs.count();
+    unsigned NumOutputs = CD.Outputs.count();
     if (NumOutputs == 1)
-      RetVal = OM.getInstr(StartIdx + Data.Outputs.find_first());
+      RetVal = OM.getInstr(StartIdx + CD.Outputs.find_first());
     else if (NumOutputs != 0) {
       RetVal = UndefValue::get(OutputType);
       unsigned OutputNum = 0;
-      for (size_t OutputIdx : Data.Outputs) {
+      for (size_t OutputIdx : CD.Outputs) {
         Instruction *Out = OM.getInstr(StartIdx + OutputIdx);
         InsertValueInst *Insert =
             InsertValueInst::Create(RetVal, Out, OutputNum++);
@@ -903,13 +903,13 @@ private:
 
     /// Replace input operands with function arguments.
     auto ArgI = OutlinedFn->arg_begin();
-    for (Input &I : Data.InputSeq) {
+    for (Input &I : CD.InputSeq) {
       Instruction *InputInst = OM.getInstr(StartIdx + I.InstrNo);
       InputInst->setOperand(I.OpNo, &*ArgI++);
     }
 
     /// Insert the constant param fixups.
-    for (ConstantCondenseInstance &CInst : Data.ConstInsts) {
+    for (ConstantCondenseInstance &CInst : CD.ConstInsts) {
       Input &BaseInput = CInst.BaseInput;
       Value *CArg =
           OM.getInstrOp(InitialStartIdx + BaseInput.InstrNo, BaseInput.OpNo);
@@ -965,7 +965,7 @@ private:
 /// \brief Perform analysis and verification for the found outline candidates.
 struct OutlinerAnalysis {
   OutlinerAnalysis(IROutlinerMapper &OM,
-                   std::vector<OutlineCandidate> &CandidateList,
+                   std::vector<Candidate> &CandidateList,
                    function_ref<TargetTransformInfo &(Function &)> GetTTI,
                    const DataLayout *Layout)
       : OM(OM), CandidateList(CandidateList), GetTTI(GetTTI), Layout(Layout) {}
@@ -975,9 +975,9 @@ struct OutlinerAnalysis {
     // Generate instruction info for each instruction that is part
     //  of an occurrence.
     BitVector OccurInstrInfo(OM.getNumMappedInstructions());
-    for (OutlineCandidate &OC : CandidateList)
-      for (unsigned Occur : OC)
-        OccurInstrInfo.set(Occur, Occur + OC.Len);
+    for (Candidate &C : CandidateList)
+      for (unsigned Occur : C)
+        OccurInstrInfo.set(Occur, Occur + C.Len);
     for (unsigned Idx : OccurInstrInfo.set_bits())
       OM.createInstrInfo(Idx);
 
@@ -1068,14 +1068,14 @@ private:
 
     size_t CurrentCandidateListSize = CandidateList.size();
     for (size_t i = 0, e = CurrentCandidateListSize; i < e; ++i) {
-      OutlineCandidate &OC = CandidateList[i];
+      Candidate &C = CandidateList[i];
 
       // Compute the input sequence for this occurrence.
-      for (size_t Oi = OccurrenceInputIdx.size(), Oe = OC.size(); Oi < Oe;
+      for (size_t Oi = OccurrenceInputIdx.size(), Oe = C.size(); Oi < Oe;
            ++Oi) {
-        unsigned Occur = OC.getOccurrence(Oi);
+        unsigned Occur = C.getOccurrence(Oi);
         CurrentOccurVerifyInst.reset(OM.getInstrFunction(Occur));
-        for (size_t InstrIdx = Occur, InstrE = Occur + OC.Len;
+        for (size_t InstrIdx = Occur, InstrE = Occur + C.Len;
              InstrIdx < InstrE; ++InstrIdx) {
           InstructionInfo &II = OM.getInstrInfo(InstrIdx);
           for (unsigned InIdx : II.InputIndexes) {
@@ -1105,7 +1105,7 @@ private:
         Counts.push_back(1);
       }
 
-      OutlineCandidate &Cur = CandidateList[i];
+      Candidate &Cur = CandidateList[i];
       size_t SharedSizeWithNext = Cur.SharedSizeWithNext;
       size_t IdxOfNext = i + 1;
       while (SharedSizeWithNext > 0 && !CandidateList[IdxOfNext].isValid())
@@ -1193,7 +1193,7 @@ private:
   void splitOutlineChain(size_t CurrentChainIndex,
                          const std::vector<size_t> &MembershipCounts,
                          const std::vector<size_t> &OccurrenceInputIdx) {
-    OutlineCandidate *OrigChain = &CandidateList[CurrentChainIndex];
+    Candidate *OrigChain = &CandidateList[CurrentChainIndex];
     SmallVector<size_t, 4> SplitChains(MembershipCounts.size(), -1);
     size_t FirstValid = 0;
     while (FirstValid < MembershipCounts.size() &&
@@ -1216,7 +1216,7 @@ private:
         continue;
       SplitChains[i] = CandidateList.size();
       CandidateList.emplace_back(SplitChains[i], OrigLen);
-      OutlineCandidate &NewChain = CandidateList.back();
+      Candidate &NewChain = CandidateList.back();
       NewChain.Occurrences.reserve(Count);
     }
 
@@ -1225,7 +1225,7 @@ private:
     for (size_t i = 0, e = OrigChain->size(); i < e; ++i) {
       size_t NewParentIdx = SplitChains[OccurrenceInputIdx[i]];
       if (NewParentIdx != CurrentChainIndex && NewParentIdx != size_t(-1)) {
-        OutlineCandidate &NewParent = CandidateList[NewParentIdx];
+        Candidate &NewParent = CandidateList[NewParentIdx];
         NewParent.Occurrences.push_back(OrigChain->Occurrences[i]);
       }
     }
@@ -1235,7 +1235,7 @@ private:
 
     // Update shared size information.
     if (CurrentChainIndex != 0) {
-      OutlineCandidate &Prev = CandidateList[CurrentChainIndex - 1];
+      Candidate &Prev = CandidateList[CurrentChainIndex - 1];
       if (Prev.SharedSizeWithNext > 0 &&
           Prev.getOccurrence(0) != OrigChain->getOccurrence(0))
         Prev.SharedSizeWithNext = 0;
@@ -1250,34 +1250,34 @@ private:
     // Create candidate data for each of the candidates.
     OM.createCandidateData(EndIdx - StartIdx);
     for (size_t i = StartIdx; i < EndIdx; ++i) {
-      OutlineCandidate &OC = CandidateList[i];
-      if (OC.size() == 0)
+      Candidate &C = CandidateList[i];
+      if (C.size() == 0)
         continue;
-      AdditionalCandidateData &OCData = OM.getCandidateData(OC);
-      unsigned FirstOccur = *OC.begin();
+      CandidateData &CD = OM.getCandidateData(C);
+      unsigned FirstOccur = *C.begin();
 
       // Compute the input sequence if needed.
-      if (OCData.InputSeq.empty()) {
+      if (CD.InputSeq.empty()) {
         // Inputs are operands that come from outside of the chain range.
-        OCData.InputSeq.reserve(OC.Len);
-        for (unsigned InstrIdx = FirstOccur, InstrE = FirstOccur + OC.Len;
+        CD.InputSeq.reserve(C.Len);
+        for (unsigned InstrIdx = FirstOccur, InstrE = FirstOccur + C.Len;
              InstrIdx < InstrE; ++InstrIdx) {
           InstructionInfo &II = OM.getInstrInfo(InstrIdx);
           for (unsigned i = 0, e = II.InputIndexes.size(); i < e; ++i)
             if (II.InputIndexes[i] < FirstOccur)
-              OCData.InputSeq.emplace_back(InstrIdx - FirstOccur, i);
+              CD.InputSeq.emplace_back(InstrIdx - FirstOccur, i);
         }
-        computeCandidateOutputs(OC, OCData);
+        computeCandidateOutputs(C, CD);
 
         // After computing we also compute the input sequences of chains
         //  that we share size with. We have already calculated the input
         //  sequence for this chain as it is a subset of our current
         //  sequence.
-        OutlineCandidate *Cur = &OC;
+        Candidate *Cur = &C;
         while (Cur->SharedSizeWithNext > 0) {
-          OutlineCandidate *Next = std::next(Cur);
-          AdditionalCandidateData &CurData = OM.getCandidateData(*Cur);
-          AdditionalCandidateData &NextData = OM.getCandidateData(*Next);
+          Candidate *Next = std::next(Cur);
+          CandidateData &CurData = OM.getCandidateData(*Cur);
+          CandidateData &NextData = OM.getCandidateData(*Next);
           computeCandidateOutputs(*Next, NextData);
           for (unsigned i = 0, e = CurData.InputSeq.size(); i < e; ++i) {
             if (CurData.InputSeq[i].InstrNo >= Cur->SharedSizeWithNext) {
@@ -1293,18 +1293,18 @@ private:
       // Verify the outputs.
       auto HasInvalidOutput = [&]() -> bool {
         // FIXME: Non invoke outputs may need special handling for dominance.
-        unsigned NumOutputs = OCData.Outputs.count();
-        if (isa<InvokeInst>(OM.getInstr(FirstOccur + OC.Len - 1))) {
+        unsigned NumOutputs = CD.Outputs.count();
+        if (isa<InvokeInst>(OM.getInstr(FirstOccur + C.Len - 1))) {
           if (NumOutputs > 1)
             return true;
-          if (NumOutputs == 1 && !OCData.Outputs.test(OC.Len - 1))
+          if (NumOutputs == 1 && !CD.Outputs.test(C.Len - 1))
             return true;
         }
         return false;
       };
       if (HasInvalidOutput()) {
-        OC.Occurrences.clear();
-        OC.SharedSizeWithNext = 0;
+        C.Occurrences.clear();
+        C.SharedSizeWithNext = 0;
         continue;
       }
 
@@ -1313,26 +1313,26 @@ private:
       //   information for.
       size_t SharedOccurrencesWithPrev = 1;
       if (i > StartIdx) {
-        OutlineCandidate &Prev = CandidateList[i - 1];
+        Candidate &Prev = CandidateList[i - 1];
         if (Prev.SharedSizeWithNext > 0)
           SharedOccurrencesWithPrev = Prev.size();
       }
 
       // Try to constant fold inputs into the candidate.
-      constantFoldInputs(FoldableInputs, OC, SharedOccurrencesWithPrev,
+      constantFoldInputs(FoldableInputs, C, SharedOccurrencesWithPrev,
                          InputOperands);
 
       // Condense any remaining constant inputs if it is profitable.
-      condenseConstantIntInputs(OC);
+      condenseConstantIntInputs(C);
     }
   }
 
   // Remove any inputs into the candidate that will be constant folded.
-  void constantFoldInputs(BitVector &FoldableInputs, OutlineCandidate &OC,
+  void constantFoldInputs(BitVector &FoldableInputs, Candidate &C,
                           size_t SharedOccurrencesWithPrev,
                           std::vector<Value *> &InputOperands) {
-    AdditionalCandidateData &OCData = OM.getCandidateData(OC);
-    unsigned FirstOccur = *OC.begin();
+    CandidateData &CD = OM.getCandidateData(C);
+    unsigned FirstOccur = *C.begin();
 
     // Only recompute the input operands if we didn't share a size with the
     // previous chain.
@@ -1340,24 +1340,24 @@ private:
       // Get the operands for the first candidate.
       InputOperands.clear();
       FoldableInputs.set();
-      FoldableInputs.resize(OCData.InputSeq.size(), true);
-      for (size_t i = 0, e = OCData.InputSeq.size(); i < e; ++i) {
-        Input &I = OCData.InputSeq[i];
+      FoldableInputs.resize(CD.InputSeq.size(), true);
+      for (size_t i = 0, e = CD.InputSeq.size(); i < e; ++i) {
+        Input &I = CD.InputSeq[i];
         Value *Op = OM.getInstrOp(FirstOccur + I.InstrNo, I.OpNo);
         InputOperands.push_back(Op);
         if (!isa<Constant>(Op) && !isa<InlineAsm>(Op))
           FoldableInputs.reset(i);
       }
     } else {
-      InputOperands.resize(OCData.InputSeq.size(), nullptr);
+      InputOperands.resize(CD.InputSeq.size(), nullptr);
       FoldableInputs.resize(InputOperands.size());
     }
 
     // Check to see which inputs will be folded.
     auto OccurRange =
-        make_range(OC.begin() + SharedOccurrencesWithPrev, OC.end());
+        make_range(C.begin() + SharedOccurrencesWithPrev, C.end());
     for (unsigned InputNo : FoldableInputs.set_bits()) {
-      Input &I = OCData.InputSeq[InputNo];
+      Input &I = CD.InputSeq[InputNo];
       Value *IOp = InputOperands[InputNo];
       if (any_of(OccurRange, [&](unsigned Occur) {
             return OM.getInstrOp(Occur + I.InstrNo, I.OpNo) != IOp;
@@ -1366,27 +1366,27 @@ private:
     }
 
     // Remove all of the inputs that will be folded.
-    erase_if(OCData.InputSeq, [&](Input &I) -> bool {
-      return FoldableInputs.test(&I - OCData.InputSeq.data());
+    erase_if(CD.InputSeq, [&](Input &I) -> bool {
+      return FoldableInputs.test(&I - CD.InputSeq.data());
     });
   }
 
   // Condense constant inputs that share a common operational difference
   //  between occurrences.
-  void condenseConstantIntInputs(OutlineCandidate &OC) {
-    AdditionalCandidateData &OCData = OM.getCandidateData(OC);
-    if (!OCData.ConstInsts.empty())
+  void condenseConstantIntInputs(Candidate &C) {
+    CandidateData &CD = OM.getCandidateData(C);
+    if (!CD.ConstInsts.empty())
       return;
 
     // Compute the set of inputs that are always constant.
-    unsigned NumConstantIntInputs = OCData.InputSeq.size();
+    unsigned NumConstantIntInputs = CD.InputSeq.size();
     if (NumConstantIntInputs < 2)
       return;
     BitVector ConstantInputs(NumConstantIntInputs, true);
     for (unsigned InputNo = 0, InputE = ConstantInputs.size(); InputNo < InputE;
          ++InputNo) {
-      Input &I = OCData.InputSeq[InputNo];
-      for (unsigned Occur : OC) {
+      Input &I = CD.InputSeq[InputNo];
+      for (unsigned Occur : C) {
         Value *InputOp = OM.getInstrOp(Occur + I.InstrNo, I.OpNo);
         if (!isa<ConstantInt>(InputOp)) {
           ConstantInputs.reset(InputNo);
@@ -1421,14 +1421,14 @@ private:
       InstDiff.clear();
 
       // Get the input sequence attached this param.
-      Input &I = OCData.InputSeq[*InputI];
+      Input &I = CD.InputSeq[*InputI];
 
       // Run over each occurrence to compute the difference between the
       // operands.
       bool Success = true;
-      for (unsigned i = 0, e = OC.size(); i < e; ++i) {
+      for (unsigned i = 0, e = C.size(); i < e; ++i) {
         bool InitialCollect = i == 0;
-        unsigned Occur = OC.getOccurrence(i);
+        unsigned Occur = C.getOccurrence(i);
 
         // Get the base parameter we are working off of.
         Value *InputOp = OM.getInstrOp(Occur + I.InstrNo, I.OpNo);
@@ -1453,7 +1453,7 @@ private:
           }
 
           // Get the next constant operand.
-          Input &NextI = OCData.InputSeq[*NextInputI];
+          Input &NextI = CD.InputSeq[*NextInputI];
           Value *NextOp = OM.getInstrOp(Occur + NextI.InstrNo, NextI.OpNo);
           ConstantInt *NextConstI = cast<ConstantInt>(NextOp);
 
@@ -1485,16 +1485,16 @@ private:
         continue;
 
       // Create the new constant inst.
-      Input &BaseInputSeq = OCData.InputSeq[ConstNumToFnInputMap[ConstIntNum]];
-      OCData.ConstInsts.emplace_back(BaseInputSeq, InstMemberships.count());
-      ConstantCondenseInstance &CInst = OCData.ConstInsts.back();
+      Input &BaseInputSeq = CD.InputSeq[ConstNumToFnInputMap[ConstIntNum]];
+      CD.ConstInsts.emplace_back(BaseInputSeq, InstMemberships.count());
+      ConstantCondenseInstance &CInst = CD.ConstInsts.back();
 
       // Add the input locations.
       SmallSet<SmallString<64>, 8> UniqueDiffs;
       unsigned ConstInputStart = ConstIntNum + 1;
       for (unsigned ConstInput : InstMemberships.set_bits()) {
         unsigned InputNo = ConstNumToFnInputMap[ConstInput];
-        CInst.InputSeqs.push_back(OCData.InputSeq[InputNo]);
+        CInst.InputSeqs.push_back(CD.InputSeq[InputNo]);
         APInt &Diff = InstDiff[ConstInput - ConstInputStart];
         CInst.Diffs.emplace_back(Diff);
         RemovedInputs.set(InputNo);
@@ -1512,13 +1512,13 @@ private:
     }
 
     // No condensable inputs.
-    if (OCData.ConstInsts.empty())
+    if (CD.ConstInsts.empty())
       return;
 
     // Remove the dead inputs.
     for (unsigned i = 0, e = ConstantInputs.size(), InputNo = 0; i < e; ++i) {
       if (RemovedInputs.test(i))
-        OCData.InputSeq.erase(OCData.InputSeq.begin() + InputNo);
+        CD.InputSeq.erase(CD.InputSeq.begin() + InputNo);
       else
         ++InputNo;
     }
@@ -1533,28 +1533,28 @@ private:
     std::vector<BitVector> Memberships;
     unsigned CurMembershipNum = 0;
     for (size_t i = 0; i < CurrentListSize; ++i) {
-      OutlineCandidate &OC = CandidateList[i];
-      AdditionalCandidateData &Data = OM.getCandidateData(OC);
+      Candidate &C = CandidateList[i];
+      CandidateData &CD = OM.getCandidateData(C);
 
       /// No inputs.
-      if (OC.size() == 0 || Data.InputSeq.empty())
+      if (C.size() == 0 || CD.InputSeq.empty())
         continue;
 
       // Lambda helper for adding a member.
-      auto AddMember = [&](Value *C, unsigned Occur) {
-        auto It = MembershipVals.find(C);
+      auto AddMember = [&](Value *V, unsigned Occur) {
+        auto It = MembershipVals.find(V);
         if (It == MembershipVals.end()) {
           if (CurMembershipNum == Memberships.size()) {
-            BitVector New(OC.size());
+            BitVector New(C.size());
             New.set(Occur);
             Memberships.emplace_back(std::move(New));
-            MembershipVals.try_emplace(C, CurMembershipNum++);
+            MembershipVals.try_emplace(V, CurMembershipNum++);
             return;
           }
-          MembershipVals.try_emplace(C, CurMembershipNum);
+          MembershipVals.try_emplace(V, CurMembershipNum);
           BitVector &Cur = Memberships[CurMembershipNum++];
           Cur.reset();
-          Cur.resize(OC.size());
+          Cur.resize(C.size());
           Cur.set(Occur);
           return;
         }
@@ -1564,18 +1564,18 @@ private:
 
       // Find the subsets of candidates that have the same constant input.
       NewCandidates.clear();
-      for (size_t InputI = 0, InputE = Data.InputSeq.size(); InputI < InputE;
+      for (size_t InputI = 0, InputE = CD.InputSeq.size(); InputI < InputE;
            ++InputI) {
-        Input &In = Data.InputSeq[InputI];
+        Input &In = CD.InputSeq[InputI];
 
         // Reset the memberships.
         CurMembershipNum = 0;
         MembershipVals.clear();
 
         // Add each constant input to a membership set.
-        for (unsigned OccurI = 0, OccurE = OC.size(); OccurI < OccurE;
+        for (unsigned OccurI = 0, OccurE = C.size(); OccurI < OccurE;
              ++OccurI) {
-          unsigned Occur = OC.getOccurrence(OccurI);
+          unsigned Occur = C.getOccurrence(OccurI);
           Value *IOp = OM.getInstrOp(Occur + In.InstrNo, In.OpNo);
           if (isa<Constant>(IOp))
             AddMember(IOp, OccurI);
@@ -1595,12 +1595,12 @@ private:
         }
       }
 
-      unsigned OrigLen = OC.Len;
+      unsigned OrigLen = C.Len;
       for (BitVector &NewCand : NewCandidates) {
         size_t NewChainIdx = CandidateList.size();
         CandidateList.emplace_back(NewChainIdx, OrigLen);
-        OutlineCandidate &OGChain = CandidateList[i];
-        OutlineCandidate &NewChain = CandidateList.back();
+        Candidate &OGChain = CandidateList[i];
+        Candidate &NewChain = CandidateList.back();
         NewChain.Occurrences.reserve(NewCand.count());
         for (unsigned OccurIdx : NewCand.set_bits())
           NewChain.Occurrences.push_back(OGChain.getOccurrence(OccurIdx));
@@ -1610,17 +1610,17 @@ private:
   }
 
   // Compute the external outputs of a given candidate.
-  void computeCandidateOutputs(OutlineCandidate &OC,
-                               AdditionalCandidateData &Data) {
+  void computeCandidateOutputs(Candidate &C,
+                               CandidateData &CD) {
     // Outputs are internal instructions that have uses outside of the chain
     // range.
-    Data.Outputs.clear();
-    for (unsigned i = 0; i < OC.Len; ++i) {
-      if (any_of(OC, [&](unsigned Occur) {
+    CD.Outputs.clear();
+    for (unsigned i = 0; i < C.Len; ++i) {
+      if (any_of(C, [&](unsigned Occur) {
             InstructionInfo &II = OM.getInstrInfo(Occur + i);
-            return II.FarthestInSameBlockOutput >= Occur + OC.Len;
+            return II.FarthestInSameBlockOutput >= Occur + C.Len;
           }))
-        Data.Outputs.set(i);
+        CD.Outputs.set(i);
     }
   }
 
@@ -1629,22 +1629,22 @@ private:
     SmallDenseSet<Value *, 8> UniqueInputOperands;
     SmallPtrSet<Constant *, 4> MaterializedValues;
     for (size_t i = StartIdx; i < EndIdx; ++i) {
-      OutlineCandidate &OC = CandidateList[i];
-      AdditionalCandidateData &Data = OM.getCandidateData(OC);
+      Candidate &C = CandidateList[i];
+      CandidateData &CD = OM.getCandidateData(C);
 
       /// Reset benefit metrics.
-      OC.invalidate();
+      C.invalidate();
 
       // Sanity check.
-      unsigned NumOccurences = OC.size();
+      unsigned NumOccurences = C.size();
       if (NumOccurences < MinOccurrences)
         continue;
-      DEBUG(dbgs() << "\nCandidate : " << OC.ID << "\n");
-      DEBUG(dbgs() << "Num : " << NumOccurences << "; Len : " << OC.Len
+      DEBUG(dbgs() << "\nCandidate : " << C.ID << "\n");
+      DEBUG(dbgs() << "Num : " << NumOccurences << "; Len : " << C.Len
                    << "\n");
 
       /// Use the first occurrence as an example for cost analysis.
-      unsigned FirstOccur = *OC.begin();
+      unsigned FirstOccur = *C.begin();
       /// Cost for each occurrence of the candidate.
       unsigned CostPerOccurence = 0;
       /// Cost for the outlined function.
@@ -1661,7 +1661,7 @@ private:
       TargetTransformInfo &TTI = GetTTI(*FirstOccurFn);
       unsigned WidestRegister = TTI.getRegisterBitWidth(false);
       unsigned ChainCost = 0;
-      for (size_t i = 0, e = OC.Len, InstIdx = FirstOccur; i < e;
+      for (size_t i = 0, e = C.Len, InstIdx = FirstOccur; i < e;
            ++i, ++InstIdx) {
         ChainCost += OM.getInstrCost(TTI, InstIdx);
         Instruction *I = OM.getInstr(InstIdx);
@@ -1754,7 +1754,7 @@ private:
 
       // Estimate using first occurrence.
       UniqueInputOperands.clear();
-      for (Input &In : Data.InputSeq) {
+      for (Input &In : CD.InputSeq) {
         Instruction *I = OM.getInstr(FirstOccur + In.InstrNo);
 
         // Check for a function call being turned into a call
@@ -1790,7 +1790,7 @@ private:
 
       /// Add the cost for each output.
       unsigned CostFromReLoad = 0;
-      for (size_t OutputIdx : Data.Outputs) {
+      for (size_t OutputIdx : CD.Outputs) {
         Type *ParamEleTy = OM.getInstr(FirstOccur + OutputIdx)->getType();
         unsigned EstCost =
             getRegisterUsage(*Layout, ParamEleTy, WidestRegister);
@@ -1812,9 +1812,9 @@ private:
       ///   = call instruction + prepare each parameter + reload outputs.
       CostPerOccurence += 1 + NumCallRegisters + CostFromReLoad;
 
-      DEBUG(dbgs() << "Inputs : " << Data.InputSeq.size() << "["
+      DEBUG(dbgs() << "Inputs : " << CD.InputSeq.size() << "["
                    << UniqueInputOperands.size() << "]"
-                   << "; Outputs : " << Data.Outputs.count() << "\n");
+                   << "; Outputs : " << CD.Outputs.count() << "\n");
       DEBUG(dbgs() << "Chain Cost : " << ChainCost << "\n");
       DEBUG(dbgs() << "CostPerOccur : " << CostPerOccurence << "\n");
 
@@ -1824,7 +1824,7 @@ private:
 
       /// Add the cost of the constant input condensing.
       ///  Each of the fixups will likely result in an add instruction.
-      for (ConstantCondenseInstance &CInst : Data.ConstInsts) {
+      for (ConstantCondenseInstance &CInst : CD.ConstInsts) {
         if (CInst.Cost == 0)
           continue;
         Input &I = CInst.InputSeqs.front();
@@ -1841,11 +1841,11 @@ private:
         NewFunctionCost += NumRegisters + (NumPtrInputs - NumRegisters);
 
       // Compute the benefit of the chain and each occurrence.
-      OC.BenefitPerOccur = ChainCost - CostPerOccurence;
-      unsigned OutlineBenefit = OC.BenefitPerOccur * NumOccurences;
+      C.BenefitPerOccur = ChainCost - CostPerOccurence;
+      unsigned OutlineBenefit = C.BenefitPerOccur * NumOccurences;
 
       // Outline cost statistics.
-      DEBUG(dbgs() << "BenefitPerOccur : " << OC.BenefitPerOccur << "\n");
+      DEBUG(dbgs() << "BenefitPerOccur : " << C.BenefitPerOccur << "\n");
       DEBUG(dbgs() << "NewFunctionCost : " << NewFunctionCost << "\n");
       DEBUG(dbgs() << "ParameterCost : " << NumCallRegisters << "\n");
 
@@ -1856,7 +1856,7 @@ private:
       // As a final step we add in estimations for register pressure. We do
       //  this last because it can be costly to compute and is unnecessary
       //  if the candidate is already not going to be profitable.
-      unsigned RegisterCost = computeOutlinedFunctionRegisterCost(OC);
+      unsigned RegisterCost = computeOutlinedFunctionRegisterCost(C);
 
       // We have extra setup and save cost if we preserve the frame pointer.
       bool ElimNonLeaf =
@@ -1882,18 +1882,18 @@ private:
       if (OutlineBenefit <= NewFunctionCost)
         continue;
 
-      Data.NumCallRegisters = NumCallRegisters;
-      OC.Benefit = OutlineBenefit - NewFunctionCost;
+      CD.NumCallRegisters = NumCallRegisters;
+      C.Benefit = OutlineBenefit - NewFunctionCost;
 
       // Less than desired benefit.
-      if (OC.Benefit < MinBenefit) {
-        OC.invalidate();
+      if (C.Benefit < MinBenefit) {
+        C.invalidate();
         continue;
       }
     }
   }
 
-  unsigned computeOutlinedFunctionRegisterCost(OutlineCandidate &OC) {
+  unsigned computeOutlinedFunctionRegisterCost(Candidate &C) {
     // Each 'key' in the map opens a new interval. The values
     // of the map are the index of the 'last seen' usage of the
     // instruction that is the key.
@@ -1903,8 +1903,8 @@ private:
     // Saves the list of instruction indices that are used in the loop.
     SmallSet<unsigned, 8> Ends;
 
-    unsigned FirstOccur = *OC.begin();
-    for (unsigned i = 0, InstIdx = FirstOccur; i < OC.Len; ++i, ++InstIdx) {
+    unsigned FirstOccur = *C.begin();
+    for (unsigned i = 0, InstIdx = FirstOccur; i < C.Len; ++i, ++InstIdx) {
       // Save the end location of each USE.
       InstructionInfo &II = OM.getInstrInfo(InstIdx);
       for (unsigned InputIdx : II.InputIndexes) {
@@ -1924,13 +1924,13 @@ private:
     for (auto &Interval : EndPoint)
       TransposeEnds[Interval.second].push_back(Interval.first);
 
-    Function *F = OM.getInstrFunction(*OC.begin());
+    Function *F = OM.getInstrFunction(*C.begin());
     TargetTransformInfo &TTI = GetTTI(*F);
     unsigned WidestRegister = TTI.getRegisterBitWidth(false);
     unsigned NumRegisters = TTI.getNumberOfRegisters(false);
     unsigned SpillCount = 0;
     SmallSet<Instruction *, 8> OpenIntervals;
-    for (unsigned i = 0, InstIdx = FirstOccur; i < OC.Len; ++i, ++InstIdx) {
+    for (unsigned i = 0, InstIdx = FirstOccur; i < C.Len; ++i, ++InstIdx) {
       // Remove all of the instructions that end at this location.
       InstrList &List = TransposeEnds[i];
       for (unsigned ToRemove : List)
@@ -1965,10 +1965,10 @@ private:
 
     // Collect all of the occurrences and blocks that need to have their
     //  usages computed.
-    for (OutlineCandidate &OC : CandidateList) {
-      if (!OC.isValid())
+    for (Candidate &C : CandidateList) {
+      if (!C.isValid())
         continue;
-      for (unsigned Occur : OC) {
+      for (unsigned Occur : C) {
         BasicBlock *Par = OM.getInstr(Occur)->getParent();
         BBsToCompute[Par].insert(Occur);
       }
@@ -2065,14 +2065,14 @@ private:
 
     // After we have the usages we rewalk the outline candidates and
     //  incorporate that info into the cost model.
-    for (OutlineCandidate &OC : CandidateList) {
-      if (!OC.isValid())
+    for (Candidate &C : CandidateList) {
+      if (!C.isValid())
         continue;
-      DEBUG(dbgs() << "\nCandidate : " << OC.ID << "\n");
-      AdditionalCandidateData &Data = OM.getCandidateData(OC);
-      unsigned NumOutputs = Data.Outputs.count();
-      for (unsigned i = 0, e = OC.size(); i < e; ++i) {
-        unsigned Occur = OC.getOccurrence(i);
+      DEBUG(dbgs() << "\nCandidate : " << C.ID << "\n");
+      CandidateData &CD = OM.getCandidateData(C);
+      unsigned NumOutputs = CD.Outputs.count();
+      for (unsigned i = 0, e = C.size(); i < e; ++i) {
+        unsigned Occur = C.getOccurrence(i);
         // Get the max usage for the beginning of this call.
         unsigned Usage = OccurToUsage[Occur];
 
@@ -2080,7 +2080,7 @@ private:
         BBLiveins.clear();
         Instruction *OccurI = OM.getInstr(Occur);
         BasicBlock *OccurPar = OccurI->getParent();
-        for (Input &In : Data.InputSeq) {
+        for (Input &In : CD.InputSeq) {
           Value *Op = OM.getInstrOp(Occur + In.InstrNo, In.OpNo);
           Instruction *IOp = dyn_cast<Instruction>(Op);
           if (IOp && IOp->getParent() != OccurPar)
@@ -2089,23 +2089,23 @@ private:
         }
 
         // Estimate any spills.
-        unsigned TotalUsage = Usage + NumOutputs + Data.NumCallRegisters;
+        unsigned TotalUsage = Usage + NumOutputs + CD.NumCallRegisters;
         unsigned Cost = 0;
         if (TotalUsage > ViableRegisters)
           Cost = TotalUsage - ViableRegisters;
 
         DEBUG(dbgs() << "Occur " << i << "\n");
         DEBUG(dbgs() << " - Usage : " << Usage << "\n");
-        DEBUG(dbgs() << " - Call Registers : " << Data.NumCallRegisters
+        DEBUG(dbgs() << " - Call Registers : " << CD.NumCallRegisters
                      << "\n");
         DEBUG(dbgs() << " - Outputs : " << NumOutputs << "\n");
         DEBUG(dbgs() << " - Cost : " << Cost << "\n");
 
-        if (OC.Benefit <= Cost) {
-          OC.invalidate();
+        if (C.Benefit <= Cost) {
+          C.invalidate();
           break;
         }
-        OC.Benefit -= Cost;
+        C.Benefit -= Cost;
       }
     }
   }
@@ -2113,7 +2113,7 @@ private:
   /// Mapper containing information for the current module.
   IROutlinerMapper &OM;
   /// Our current list of candidates.
-  std::vector<OutlineCandidate> &CandidateList;
+  std::vector<Candidate> &CandidateList;
   /// Functor for getting the target information for a function.
   function_ref<TargetTransformInfo &(Function &)> GetTTI;
   /// Current Module data layout.
@@ -2121,19 +2121,19 @@ private:
 };
 
 // \brief Outline all of the profitable candidates.
-void outlineCandidates(MutableArrayRef<OutlineCandidate> CL,
+void outlineCandidates(MutableArrayRef<Candidate> CL,
                        IROutlinerMapper &OM, bool HasProfileData) {
   FunctionSplicer FS(HasProfileData);
-  for (const OutlineCandidate &OC : CL) {
-    if (!OC.isValid())
+  for (const Candidate &C : CL) {
+    if (!C.isValid())
       continue;
     ++NumCandidatesOutlined;
 
     // Prepare->Outline->Finalize
-    FS.prepareForNewCandidate(OC, OM);
-    for (unsigned Occur : OC)
-      FS.outlineOccurrence(OC, Occur, OM);
-    FS.finalize(OC, OM);
+    FS.prepareForNewCandidate(C, OM);
+    for (unsigned Occur : C)
+      FS.outlineOccurrence(C, Occur, OM);
+    FS.finalize(C, OM);
   }
 }
 
@@ -2164,8 +2164,8 @@ bool runImpl(Module &M, ProfileSummaryInfo *PSI,
       };
 
   // Find outlining candidates.
-  std::vector<OutlineCandidate> CL;
-  if (!findSequentialOutliningCandidates(
+  std::vector<Candidate> CL;
+  if (!findSequentialCandidates(
     PrePruneFn, CCVec, MinInstructionLength, MinOccurrences, CL))
     return false;
 
@@ -2174,7 +2174,7 @@ bool runImpl(Module &M, ProfileSummaryInfo *PSI,
   OAI.analyzeCandidateList();
 
   // Prune any overlaps.
-  if (!pruneSequentialOutlineCandidateList(CL, OM.getNumMappedInstructions()))
+  if (!pruneSequentialCandidateList(CL, OM.getNumMappedInstructions()))
     return false;
 
   // Outline the profitable candidates.
