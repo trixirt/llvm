@@ -215,10 +215,8 @@ ModulePass *createBarrierNoopPass();
 /// indicating the set of functions they may target at run-time.
 ModulePass *createCalledValuePropagationPass();
 
-//===----------------------------------------------------------------------===//
 /// createCodeSizeOutlinerPass - This pass outlines congruent parts of
 /// functions.
-///
 ModulePass *createCodeSizeOutlinerPass();
 
 /// What to do with the summary when running passes that operate on it.
