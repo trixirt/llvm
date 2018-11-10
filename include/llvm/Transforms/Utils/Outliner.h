@@ -37,19 +37,19 @@ struct Candidate {
   /// The estimated benefit we receive per occurrence.
   unsigned BenefitPerOccur = 0;
 
-  /// Instruction size that this candidate shares with the next.
+  /// Instruction size of the next candidate.
   unsigned SharedSizeWithNext = 0;
 
   /// Identifier for each occurrence.
   std::vector<unsigned> Occurrences;
 
   // Accessors.
-  using Iterator = std::vector<unsigned>::iterator;
-  using ConstIterator = std::vector<unsigned>::const_iterator;
-  Iterator begin() { return Occurrences.begin(); }
-  Iterator end() { return Occurrences.end(); }
-  ConstIterator begin() const { return Occurrences.begin(); }
-  ConstIterator end() const { return Occurrences.end(); }
+  using iterator = std::vector<unsigned>::iterator;
+  using const_iterator = std::vector<unsigned>::const_iterator;
+  iterator begin() { return Occurrences.begin(); }
+  iterator end() { return Occurrences.end(); }
+  const_iterator begin() const { return Occurrences.begin(); }
+  const_iterator end() const { return Occurrences.end(); }
   size_t size() const { return Occurrences.size(); }
 
   // Check to see if this chain is still profitable to outline.
@@ -90,14 +90,14 @@ public:
   }
 
   // Map a new instruction.
-  void mapInstr(void *I) {
+  void mapInstr(Instruction *I) {
     if (I)
       InstructionToIdxMap.try_emplace(I, InstrVec.size());
     InstrVec.push_back(I);
   }
 
-  // Get the index of /p I inside of the internal vector.
-  unsigned getInstrIdx(void *I) {
+  // Get the index of I inside of the internal vector.
+  unsigned getInstrIdx(Instruction *I) {
     auto It = InstructionToIdxMap.find(I);
     return LLVM_UNLIKELY(It == InstructionToIdxMap.end()) ? -1 : It->second;
   }
@@ -108,13 +108,13 @@ public:
 private:
   /// Stores location of instructions mapped to the corresponding index in
   ///  the CCVec.
-  std::vector<void *> InstrVec;
+  std::vector<Instruction *> InstrVec;
 
   /// Map<Instruction, Index in InstrVec>
-  DenseMap<void *, unsigned> InstructionToIdxMap;
+  DenseMap<Instruction *, unsigned> InstructionToIdxMap;
 };
 
-// Map the module /p M to prepare for outlining.
+// Map the module M to prepare for outlining.
 std::vector<unsigned>
 mapIRModule(OutlinerMapper &OM, Module &M, ProfileSummaryInfo *PSI,
             function_ref<BlockFrequencyInfo &(Function &)> GetBFI);
