@@ -134,7 +134,7 @@ struct InstructionInfo {
 namespace {
 
 // Helper function for getting the size in bits of a type
-//  in a multiple of /p WidestRegister.
+//  in a multiple of WidestRegister.
 unsigned getTypeSize(const DataLayout &DL, Type *Ty, unsigned WidestRegister) {
   if (Ty->isTokenTy())
     return 0u;
@@ -147,7 +147,7 @@ unsigned getTypeSize(const DataLayout &DL, Type *Ty, unsigned WidestRegister) {
   return TypeSize;
 }
 
-// Helper function for getting the register usage of type /p Ty.
+// Helper function for getting the register usage of type Ty.
 unsigned getRegisterUsage(const DataLayout &DL, Type *Ty,
                           unsigned WidestRegister) {
   unsigned ret = 0;
@@ -192,19 +192,19 @@ public:
   ///  Instruction Information Utilities.
   ///
 
-  // Get the instruction at index /p Idx.
+  // Get the instruction at index Idx.
   Instruction *getInstr(unsigned Idx) {
     return OutlinerMapper::getInstr<Instruction>(Idx);
   }
-  // Get the operand /p OpIdx of the instruction at index /p Idx.
+  // Get the operand OpIdx of the instruction at index Idx.
   Value *getInstrOp(unsigned Idx, unsigned OpIdx) {
     return getInstr(Idx)->getOperand(OpIdx);
   }
-  // Get the parent function of the instruction at /p Idx.
+  // Get the parent function of the instruction at Idx.
   Function *getInstrFunction(size_t Idx) {
     return getInstr(Idx)->getFunction();
   }
-  // Get or compute the cost of the instruction at /p InstrIdx.
+  // Get or compute the cost of the instruction at InstrIdx.
   unsigned getInstrCost(TargetTransformInfo &TTI, size_t InstrIdx) {
     InstructionInfo *Info = InstrInfo[InstrIdx];
     if (Info->Cost == unsigned(-1)) {
@@ -217,13 +217,13 @@ public:
     }
     return Info->Cost;
   }
-  // Get the instruction info attached to index /p InstrIdx
+  // Get the instruction info attached to index InstrIdx
   InstructionInfo &getInstrInfo(size_t InstrIdx) {
     InstructionInfo *Info = InstrInfo[InstrIdx];
     assert(Info && "Queried instruction has no info created.");
     return *Info;
   }
-  // Create instruction info for the instruction at /p InstrIdx
+  // Create instruction info for the instruction at InstrIdx
   void createInstrInfo(size_t InstrIdx) {
     InstructionInfo *&Info = InstrInfo[InstrIdx];
     assert(!Info && "Instruction info already generated.");
@@ -1188,7 +1188,7 @@ private:
     }
   }
 
-  // Split the OutlineChain at index /p CurrentChainIndex into N different
+  // Split the OutlineChain at index CurrentChainIndex into N different
   // candidates with the provided memberships.
   void splitOutlineChain(size_t CurrentChainIndex,
                          const std::vector<size_t> &MembershipCounts,
@@ -2137,7 +2137,7 @@ void outlineCandidates(MutableArrayRef<Candidate> CL,
   }
 }
 
-// Run the outliner over the provided module /p M.
+// Run the outliner over the provided module M.
 bool runImpl(Module &M, ProfileSummaryInfo *PSI,
              function_ref<BlockFrequencyInfo &(Function &)> GetBFI,
              function_ref<TargetTransformInfo &(Function &)> GetTTI) {

@@ -37,8 +37,8 @@ namespace {
 //   Basic adapted implementation of SA-IS algorithm.
 class SuffixArray {
 public:
-  // Compute the suffix array of /p S with given alphabet size /p AlphabetSize
-  // and store the result in /p SA
+  // Compute the suffix array of S with given alphabet size AlphabetSize
+  // and store the result in SA
   static std::vector<int> compute(std::vector<unsigned> &S) {
     // REQUIRED: N-1 must be 0 to act as a sentinel for the suffix array
     // algorithm.
@@ -194,7 +194,7 @@ private:
   std::vector<int> SA;
   std::vector<int> Bucket;
 };
-// Construct the LCP array for a given suffix array /p SA and string /p S.
+// Construct the LCP array for a given suffix array SA and string S.
 static std::vector<int> computeLCP(ArrayRef<unsigned> S, ArrayRef<int> SA) {
   int N = S.size();
   std::vector<int> LCP(N), Rank(N);
@@ -584,7 +584,7 @@ private:
     }
     return true;
   }
-  // Check to see if the provided gep /p GEP indexes a struct type.
+  // Check to see if the provided gep GEP indexes a struct type.
   bool gepContainsStructType(GetElementPtrInst *GEP) {
     gep_type_iterator It = gep_type_begin(GEP), E = gep_type_end(GEP);
     for (; It != E; ++It)
@@ -631,7 +631,7 @@ template <> struct llvm::DenseMapInfo<const RelaxedExpression *> {
 // How an instruction is mapped.
 enum class IRInstructionMapType { Invalid, Ignored, Valid };
 
-// Checks to see if a provided instruction /p I can be mapped.
+// Checks to see if a provided instruction I can be mapped.
 IRInstructionMapType getInstrMapType(Instruction *I) {
   CallSite CS(I);
   if (CS) {
@@ -800,7 +800,7 @@ llvm::mapIRModule(OutlinerMapper &OM, Module &M, ProfileSummaryInfo *PSI,
     }
   }
 
-  // Dump the mapped congruencies found for the module /p M.
+  // Dump the mapped congruencies found for the module M.
   if (DumpCC) {
 #ifndef NDEBUG
     for (Function &F : M) {
