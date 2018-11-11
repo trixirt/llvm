@@ -23,7 +23,7 @@ class BitVector;
 class BlockFrequencyInfo;
 class ProfileSummaryInfo;
 
-/// \brief A potential candidate to be outlined.
+/// A potential candidate to be outlined.
 struct Candidate {
   /// A unique ID for this outline candidate.
   unsigned ID;
@@ -81,7 +81,7 @@ bool findSequentialCandidates(
 bool pruneSequentialCandidateList(MutableArrayRef<Candidate> CL,
                                   unsigned NumMappedInstructions);
 
-/// \brief Helper struct containing mapping information for a module.
+/// Helper struct containing mapping information for a module.
 class OutlinerMapper {
 public:
   // Get the instruction at index Idx.
@@ -107,7 +107,7 @@ public:
 
 private:
   /// Stores location of instructions mapped to the corresponding index in
-  ///  the CCVec.
+  /// the CCVec.
   std::vector<Instruction *> InstrVec;
 
   /// Map<Instruction, Index in InstrVec>

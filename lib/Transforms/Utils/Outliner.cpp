@@ -33,8 +33,8 @@ static cl::opt<bool> DumpCC(
 
 // Suffix array implementation.
 namespace {
-/// \brief Compute the suffix array.
-//   Basic adapted implementation of SA-IS algorithm.
+/// Compute the suffix array.
+//  Basic adapted implementation of SA-IS algorithm.
 class SuffixArray {
 public:
   // Compute the suffix array of S with given alphabet size AlphabetSize
@@ -419,7 +419,7 @@ bool llvm::pruneSequentialCandidateList(
 
 /// Mapping an IR module for outlining.
 
-/// \brief Expression with relaxed equivalency constraints.
+/// Expression with relaxed equivalency constraints.
 class RelaxedExpression {
 public:
   /// A special state for special equivalence constraints.
@@ -434,7 +434,7 @@ public:
       if (CS.isInlineAsm() || CS.isInvoke())
         SS = RelaxedExpression::ConstrainedCall;
       /// Intrinsics and functions without exact definitions can not
-      ///  have their address taken.
+      /// have their address taken.
       else if (Function *F = CS.getCalledFunction()) {
         if (!canTakeFnAddress(F))
           SS = RelaxedExpression::ConstrainedCall;
@@ -509,7 +509,7 @@ private:
     switch (Inst->getOpcode()) {
     case Instruction::ShuffleVector: {
       // LangRef : The shuffle mask operand is required to be a
-      //  constant vector with either constant integer or undef values.
+      // constant vector with either constant integer or undef values.
       return Inst->getOperand(2) == OE->getOperand(2);
     }
     case Instruction::Call:
@@ -707,7 +707,7 @@ IRInstructionMapType getInstrMapType(Instruction *I) {
   // We don't take allocas from the parent function.
   // PHINodes don't cost anything and will simply become inputs.
   // Terminators will exist in both so there is no benefit from outlining
-  //  them.
+  // them.
   if (isa<AllocaInst>(I) || isa<PHINode>(I) || isa<TerminatorInst>(I))
     return IRInstructionMapType::Invalid;
   // Don't take any exception handling instructions.

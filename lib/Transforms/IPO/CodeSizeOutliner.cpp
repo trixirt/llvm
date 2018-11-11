@@ -36,10 +36,6 @@
 #include "llvm/Transforms/Utils/Outliner.h"
 #include <sstream>
 
-#ifndef DEBUG
-#define DEBUG(a)
-#endif
-
 using namespace llvm;
 
 static cl::opt<unsigned> MinOccurrences(
@@ -59,31 +55,31 @@ STATISTIC(NumOccurrencesOutlined, "Number of occurrences outlined");
 STATISTIC(NumCandidatesOutlined, "Number of outlined functions created");
 
 namespace {
-/// \brief A struct representing an input into an outlined function.
+/// A struct representing an input into an outlined function.
 struct Input {
-  Input(unsigned short InstrNo, unsigned short OpNo)
+  Input(unsigned InstrNo, unsigned short OpNo)
       : InstrNo(InstrNo), OpNo(OpNo) {}
   Input() {}
   /// The index of the instruction in the sequence.
-  unsigned short InstrNo;
+  unsigned InstrNo;
   /// The index of the operand into the instruction.
   unsigned short OpNo;
 };
 
-/// \brief Contains the information necessary for condensing constant inputs.
+// Contains the information necessary for condensing constant inputs.
 // Condense any constant int inputs to the outlined function.
-// example:
-//  void outlinedFn(int a, int b);
-// call 1: outlinedFn(1, 2);
-// call 2: outlinedFn(3, 4);
+// Example:
+//   void outlinedFn(int a, int b);
+//   call 1: outlinedFn(1, 2);
+//   call 2: outlinedFn(3, 4);
 // We identify that in all occurrences that arg 2 is simply
-//  a difference of 1 from arg 1.
+// a difference of 1 from arg 1.
 // void outlinedFn(int a) {
 //   int b = a + 1;
 //   ...
 // }
 struct ConstantCondenseInstance {
-  /// The base input.
+  /// The starting input.
   Input BaseInput;
 
   /// The difference from the base input.
@@ -93,7 +89,7 @@ struct ConstantCondenseInstance {
   std::vector<Input> InputSeqs;
 
   /// The cost of this instance.
-  unsigned Cost;
+  unsigned Cost = -1;
 
   ConstantCondenseInstance(Input BaseInput, unsigned Reserve)
       : BaseInput(BaseInput) {
@@ -102,7 +98,7 @@ struct ConstantCondenseInstance {
   }
 };
 
-/// \brief Information necessary for outlining specific to IR outlining.
+/// Information necessary for outlining specific to IR outlining.
 struct CandidateData {
   /// Inputs into this candidate : Vector<Instr Index, Op#>.
   std::vector<Input> InputSeq;
@@ -117,7 +113,7 @@ struct CandidateData {
   unsigned NumCallRegisters = 0;
 };
 
-/// \brief Holds information about a particular instruction.
+/// Holds information about a particular instruction.
 struct InstructionInfo {
   /// The inputs/operands going into this instruction.
   SmallVector<unsigned, 4> InputIndexes;
@@ -134,7 +130,7 @@ struct InstructionInfo {
 namespace {
 
 // Helper function for getting the size in bits of a type
-//  in a multiple of WidestRegister.
+// in a multiple of WidestRegister.
 unsigned getTypeSize(const DataLayout &DL, Type *Ty, unsigned WidestRegister) {
   if (Ty->isTokenTy())
     return 0u;
@@ -150,12 +146,12 @@ unsigned getTypeSize(const DataLayout &DL, Type *Ty, unsigned WidestRegister) {
 // Helper function for getting the register usage of type Ty.
 unsigned getRegisterUsage(const DataLayout &DL, Type *Ty,
                           unsigned WidestRegister) {
-  unsigned ret = 0;
+  unsigned Ret = 0;
   // getTypeSize calls getTypeSizeInBits which expects that
   // the type size is non zero.  So check..
   if (Ty != nullptr && Ty->isSized())
-    ret = getTypeSize(DL, Ty, WidestRegister) / WidestRegister;
-  return ret;
+    Ret = getTypeSize(DL, Ty, WidestRegister) / WidestRegister;
+  return Ret;
 }
 
 // Helper to get the cost of a constant.
@@ -167,31 +163,27 @@ unsigned getGlobalValueCost(const Constant *C) {
   const ConstantExpr *CE = dyn_cast<ConstantExpr>(C);
   if (!CE)
     return TargetTransformInfo::TCC_Free;
-  if (CE->getOpcode() == Instruction::GetElementPtr) {
-    unsigned Cost = TargetTransformInfo::TCC_Basic;
-    Cost += getGlobalValueCost(CE->getOperand(0));
-    for (unsigned i = 1, e = CE->getNumOperands(); i < e; ++i) {
-      const Constant *COp = CE->getOperand(i);
-      if (const ConstantInt *CI = dyn_cast<ConstantInt>(COp)) {
-        if (!CI->isZero())
-          ++Cost;
-      } else
-        ++Cost;
-    }
-    return Cost;
-  }
   if (CE->isCast())
     return getGlobalValueCost(CE->getOperand(0));
-  return TargetTransformInfo::TCC_Free;
+  if (CE->getOpcode() != Instruction::GetElementPtr)
+      return TargetTransformInfo::TCC_Free;
+  // CE->getOpcode() == Instruction::GetElementPtr
+  unsigned Cost = TargetTransformInfo::TCC_Basic;
+  Cost += getGlobalValueCost(CE->getOperand(0));
+  for (unsigned i = 1, e = CE->getNumOperands(); i < e; ++i) {
+    const Constant *COp = CE->getOperand(i);
+    if (const ConstantInt *CI = dyn_cast<ConstantInt>(COp)) {
+      if (!CI->isZero())
+        ++Cost;
+    } else
+      ++Cost;
+  }
+  return Cost;
 }
 
-/// \brief Helper struct containing mapping information for a module.
+/// Helper struct containing mapping information for a module.
 class IROutlinerMapper : public OutlinerMapper {
 public:
-  ///
-  ///  Instruction Information Utilities.
-  ///
-
   // Get the instruction at index Idx.
   Instruction *getInstr(unsigned Idx) {
     return OutlinerMapper::getInstr<Instruction>(Idx);
@@ -209,11 +201,9 @@ public:
     InstructionInfo *Info = InstrInfo[InstrIdx];
     if (Info->Cost == unsigned(-1)) {
       Info->Cost = computeInstrCost(TTI, InstrIdx);
-#ifndef NDEBUG
-      Instruction *I = getInstr(InstrIdx);
-      DEBUG(dbgs() << "Instruction Cost : " << Info->Cost << " : " << *I
-                   << "\n");
-#endif
+      LLVM_DEBUG(dbgs() << "Instruction Cost : " << Info->Cost << " : "
+		        << *getInstr(InstrIdx)
+		        << "\n");
     }
     return Info->Cost;
   }
@@ -261,7 +251,7 @@ public:
   }
 
   ///
-  ///  Candidate Information Utilities.
+  /// Candidate Information Utilities.
   ///
 
   // Get the data attached to the provided candidate.
@@ -320,8 +310,8 @@ private:
       Cost = getRegisterUsage(Layout, LITy, TTI.getRegisterBitWidth(false));
 
       // Be conservative about the cost of loads given they may be folded.
-      //  Estimating a lower cost helps to prevent over estimating the
-      //  benefit of this instruction.
+      // Estimating a lower cost helps to prevent over estimating the
+      // benefit of this instruction.
       Value *Ptr = LI->getPointerOperand();
       auto WillLoadFold = [&]() -> bool {
         // We likely can't fold from a phi node.
@@ -334,7 +324,7 @@ private:
         if (HasFreeAddressComp)
           return true;
         // Non Free address comp will likely need to load globals or values
-        //  used more than once.
+        // used more than once.
         return !isa<Constant>(Ptr) && I->hasOneUse();
       };
       if (WillLoadFold())
@@ -350,7 +340,7 @@ private:
       Cost = TTI.getUserCost(GEP);
 
       // Be conservative about non free global geps that appear more than once
-      //  in a function, the gep is likely to be materialized only once.
+      // in a function, the gep is likely to be materialized only once.
       GlobalVariable *GVar = dyn_cast<GlobalVariable>(GEP->getPointerOperand());
       if (!GVar)
         break;
@@ -387,7 +377,7 @@ private:
                                           CI->getValue(), CI->getType());
       }
       // If we don't have free address computation any use of globals
-      //  can actually result in more cost.
+      // can actually result in more cost.
       else if (!HasFreeAddressComp)
         Cost += getGlobalValueCost(COp);
     }
@@ -440,7 +430,7 @@ private:
   SpecificBumpPtrAllocator<CandidateData> DataAlloc;
 };
 
-/// \brief A specific instance of an outlined candidate.
+/// A specific instance of an outlined candidate.
 struct FunctionSplicer {
   FunctionSplicer(bool EmitProfileData)
       : EmitProfileData(EmitProfileData), NumOutlined(0) {
@@ -538,7 +528,7 @@ struct FunctionSplicer {
         CallLoc = It->getDebugLoc();
 
     // If this is not the first occurrence we merge metadata and attributes for
-    //  the outlined instructions.
+    // the outlined instructions.
     if (!InitialOccur) {
       unsigned KnownIDs[] = {LLVMContext::MD_tbaa,
                              LLVMContext::MD_alias_scope,
@@ -641,7 +631,7 @@ struct FunctionSplicer {
       EntryBlock->eraseFromParent();
   }
 
-  // \brief Finalize this function as an outline instance.
+  // Finalize this function as an outline instance.
   void finalize(const Candidate &C, IROutlinerMapper &OM) {
     // Check to see if our tail is an invoke instruction. If so then we
     // transform it into a call.
@@ -667,22 +657,22 @@ struct FunctionSplicer {
     OutlinedFn->setName(Twine("cso_") + Twine(NumOutlined++));
 
     // Debug.
-    DEBUG(dbgs() << "** Outlining : " << OutlinedFn->getName() << "\n"
-                 << " Candidate : " << C.ID << "\n"
-                 << " occurrences : " << C.size() << "\n"
-                 << " size : " << C.Len << "\n"
-                 << " benefit : " << C.Benefit << "\n"
-                 << " benefit per occurrence : " << C.BenefitPerOccur << "\n");
+    LLVM_DEBUG(dbgs() << "** Outlining : " << OutlinedFn->getName() << "\n"
+                      << " Candidate : " << C.ID << "\n"
+                      << " occurrences : " << C.size() << "\n"
+                      << " size : " << C.Len << "\n"
+                      << " benefit : " << C.Benefit << "\n"
+                      << " benefit per occurrence : " << C.BenefitPerOccur << "\n");
   }
 
 private:
   // Re-Unique the inputs for the outlined function.
-  //  example:
+  // Example:
   //   void outlinedFn(int, int);
-  // call 1: outlinedFn(a, a);
-  // call 2: outlinedFn(b, b);
+  //   call 1: outlinedFn(a, a);
+  //   call 2: outlinedFn(b, b);
   // We identify that parameters 1 and 2 are the same
-  //  for each callsite, so we condense them.
+  // for each callsite, so we condense them.
   void uniqueInputs(CandidateData &CD) {
     FunctionType *CurFnTy = OutlinedFn->getFunctionType();
     unsigned NumInputs = CurFnTy->getNumParams();
@@ -725,7 +715,7 @@ private:
     CollectInputInfo(FirstCS, ArgNoToCG, ArgCongruencyGroups);
 
     // If we have the same amount of congruency groups as we do arguments,
-    //   the they are already unique.
+    // the they are already unique.
     if (NumInputs == ArgCongruencyGroups.size())
       return;
     // Check every other user to see if the equivalencies hold up.
@@ -760,12 +750,12 @@ private:
           continue;
 
         // Move the non congruent matches from the left group to a
-        //   new congruency group.
+        // new congruency group.
         unsigned NewGroupId = ArgCongruencyGroups.size();
         ArgCongruencyGroups.emplace_back(std::move(NonCongruentLeft));
 
         // Move non congruent matches to a new congruency group
-        //   and remove them from the top level mapping.
+        // and remove them from the top level mapping.
         for (unsigned SetBit : ArgCongruencyGroups.back().set_bits())
           ArgNoToCG[SetBit] = NewGroupId;
       }
@@ -832,7 +822,7 @@ private:
     OutlinedFn = MergedFn;
   }
 
-  // \brief Outline the initial occurrence of this chain.
+  // Outline the initial occurrence of this chain.
   void outlineInitialOccurrence(const Candidate &C,
                                 IROutlinerMapper &OM, size_t StartIdx,
                                 ArrayRef<Value *> Args, BasicBlock *Entry) {
@@ -872,7 +862,7 @@ private:
     }
 
     // FIXME: Ideally we should compute the real count for this function but
-    //  for now we just tag it as cold.
+    // for now we just tag it as cold.
     if (EmitProfileData)
       OutlinedFn->addFnAttr(Attribute::Cold);
 
@@ -962,7 +952,7 @@ private:
   unsigned NumOutlined;
 };
 
-/// \brief Perform analysis and verification for the found outline candidates.
+/// Perform analysis and verification for the found outline candidates.
 struct OutlinerAnalysis {
   OutlinerAnalysis(IROutlinerMapper &OM,
                    std::vector<Candidate> &CandidateList,
@@ -973,7 +963,7 @@ struct OutlinerAnalysis {
   // Analyze our found candidates for benefit and correctness.
   void analyzeCandidateList() {
     // Generate instruction info for each instruction that is part
-    //  of an occurrence.
+    // of an occurrence.
     BitVector OccurInstrInfo(OM.getNumMappedInstructions());
     for (Candidate &C : CandidateList)
       for (unsigned Occur : C)
@@ -988,7 +978,7 @@ struct OutlinerAnalysis {
     computeFunctionType(0, CandidateList.size());
 
     // Analyze the currently profitable candidates for partitioning based
-    //  upon equivalent inputs.
+    // upon equivalent inputs.
     analyzeInputsForPartitioning();
 
     // Estimate the benefit for each candidate.
@@ -996,7 +986,7 @@ struct OutlinerAnalysis {
 
     // The last analysis is the register cost per occurrence.
     // This is very costly so we do this after selecting the profitable
-    //  candidates.
+    // candidates.
     computeOutlineCallRegisterCost();
   }
 
@@ -1117,7 +1107,7 @@ private:
         splitOutlineChain(i, Counts, OccurrenceInputIdx);
 
       // If we share a size with the next chain then we do cleanup and set up to
-      //  reduce the amount of work we need to do during the next iteration.
+      // reduce the amount of work we need to do during the next iteration.
       if (SharedSizeWithNext > 0 && CandidateList[IdxOfNext].isValid()) {
         // Get the cut off point for moving to the next candidate.
         size_t SharedCutOffPoint = 0;
@@ -1143,7 +1133,7 @@ private:
           if (OccurrenceInputIdx[i] == 0)
             UnResolved.reset(i);
         // Condense the internal inputs vector in the case where two vectors are
-        //  now equivalent given the smaller size.
+        // now equivalent given the smaller size.
         size_t InsertIdx = 1;
         for (size_t i = 1, e = VerificationCands.size(); i < e; ++i) {
           VerifyInst &VI = VerificationCands[i];
@@ -1270,9 +1260,9 @@ private:
         computeCandidateOutputs(C, CD);
 
         // After computing we also compute the input sequences of chains
-        //  that we share size with. We have already calculated the input
-        //  sequence for this chain as it is a subset of our current
-        //  sequence.
+        // that we share size with. We have already calculated the input
+        // sequence for this chain as it is a subset of our current
+        // sequence.
         Candidate *Cur = &C;
         while (Cur->SharedSizeWithNext > 0) {
           Candidate *Next = std::next(Cur);
@@ -1309,8 +1299,8 @@ private:
       }
 
       // Check to see if we share candidates with our predecessor. If we
-      //   do then we can avoid rechecking candidates that we already have
-      //   information for.
+      // do then we can avoid rechecking candidates that we already have
+      // information for.
       size_t SharedOccurrencesWithPrev = 1;
       if (i > StartIdx) {
         Candidate &Prev = CandidateList[i - 1];
@@ -1372,7 +1362,7 @@ private:
   }
 
   // Condense constant inputs that share a common operational difference
-  //  between occurrences.
+  // between occurrences.
   void condenseConstantIntInputs(Candidate &C) {
     CandidateData &CD = OM.getCandidateData(C);
     if (!CD.ConstInsts.empty())
@@ -1525,7 +1515,7 @@ private:
   }
 
   // Analyzes the input parameters to each candidate to see if we can get
-  //  can get a more profitable chain by only considering some candidates.
+  // can get a more profitable chain by only considering some candidates.
   void analyzeInputsForPartitioning() {
     size_t CurrentListSize = CandidateList.size();
     SmallVector<BitVector, 8> NewCandidates;
@@ -1639,9 +1629,9 @@ private:
       unsigned NumOccurences = C.size();
       if (NumOccurences < MinOccurrences)
         continue;
-      DEBUG(dbgs() << "\nCandidate : " << C.ID << "\n");
-      DEBUG(dbgs() << "Num : " << NumOccurences << "; Len : " << C.Len
-                   << "\n");
+      LLVM_DEBUG(dbgs() << "\nCandidate : " << C.ID << "\n");
+      LLVM_DEBUG(dbgs() << "Num : " << NumOccurences << "; Len : " << C.Len
+                        << "\n");
 
       /// Use the first occurrence as an example for cost analysis.
       unsigned FirstOccur = *C.begin();
@@ -1734,7 +1724,7 @@ private:
           if (Layout->getTypeSizeInBits(Ty) == TotalVal) {
             unsigned FoldedCost = TargetTransformInfo::TCC_Basic * 2;
             // If they are inputs then we add cost for removing this
-            //  folding oppurtunity.
+            // folding oppurtunity.
             if (Info.InputIndexes[0] < FirstOccur ||
                 Info.InputIndexes[1] < FirstOccur) {
               CostPerOccurence += FoldedCost;
@@ -1758,7 +1748,7 @@ private:
         Instruction *I = OM.getInstr(FirstOccur + In.InstrNo);
 
         // Check for a function call being turned into a call
-        //  to a function pointer.
+        // to a function pointer.
         CallSite CS(I);
         if (CS && In.OpNo == CS.getNumArgOperands())
           NewFunctionCost += TargetTransformInfo::TCC_Basic;
@@ -1773,7 +1763,7 @@ private:
         if (IOpTy->isPointerTy())
           ++NumPtrInputs;
         // Keep track of the total size of the inputs to the outlined
-        //  function, we will use this for the cost of the call itself.
+        // function, we will use this for the cost of the call itself.
         TotalParamSize += getTypeSize(*Layout, IOpTy, WidestRegister);
 
         // Constant operands may have additional cost.
@@ -1809,21 +1799,21 @@ private:
       unsigned NumRegisters = TTI.getNumberOfRegisters(false);
 
       /// A call is generated at each occurence.
-      ///   = call instruction + prepare each parameter + reload outputs.
+      /// = call instruction + prepare each parameter + reload outputs.
       CostPerOccurence += 1 + NumCallRegisters + CostFromReLoad;
 
-      DEBUG(dbgs() << "Inputs : " << CD.InputSeq.size() << "["
-                   << UniqueInputOperands.size() << "]"
-                   << "; Outputs : " << CD.Outputs.count() << "\n");
-      DEBUG(dbgs() << "Chain Cost : " << ChainCost << "\n");
-      DEBUG(dbgs() << "CostPerOccur : " << CostPerOccurence << "\n");
+      LLVM_DEBUG(dbgs() << "Inputs : " << CD.InputSeq.size() << "["
+                        << UniqueInputOperands.size() << "]"
+                        << "; Outputs : " << CD.Outputs.count() << "\n");
+      LLVM_DEBUG(dbgs() << "Chain Cost : " << ChainCost << "\n");
+      LLVM_DEBUG(dbgs() << "CostPerOccur : " << CostPerOccurence << "\n");
 
       // No possibility of benefit.
       if (CostPerOccurence >= ChainCost)
         continue;
 
       /// Add the cost of the constant input condensing.
-      ///  Each of the fixups will likely result in an add instruction.
+      /// Each of the fixups will likely result in an add instruction.
       for (ConstantCondenseInstance &CInst : CD.ConstInsts) {
         if (CInst.Cost == 0)
           continue;
@@ -1836,7 +1826,7 @@ private:
 
       // Penalize large amounts of materialized pointers.
       // There are likely to be a number of spills so we conservatively say
-      //  that each new input will spill.
+      // that each new input will spill.
       if (NumPtrInputs > NumRegisters)
         NewFunctionCost += NumRegisters + (NumPtrInputs - NumRegisters);
 
@@ -1845,17 +1835,17 @@ private:
       unsigned OutlineBenefit = C.BenefitPerOccur * NumOccurences;
 
       // Outline cost statistics.
-      DEBUG(dbgs() << "BenefitPerOccur : " << C.BenefitPerOccur << "\n");
-      DEBUG(dbgs() << "NewFunctionCost : " << NewFunctionCost << "\n");
-      DEBUG(dbgs() << "ParameterCost : " << NumCallRegisters << "\n");
+      LLVM_DEBUG(dbgs() << "BenefitPerOccur : " << C.BenefitPerOccur << "\n");
+      LLVM_DEBUG(dbgs() << "NewFunctionCost : " << NewFunctionCost << "\n");
+      LLVM_DEBUG(dbgs() << "ParameterCost : " << NumCallRegisters << "\n");
 
       // No benefit.
       if (OutlineBenefit <= NewFunctionCost)
         continue;
 
       // As a final step we add in estimations for register pressure. We do
-      //  this last because it can be costly to compute and is unnecessary
-      //  if the candidate is already not going to be profitable.
+      // this last because it can be costly to compute and is unnecessary
+      // if the candidate is already not going to be profitable.
       unsigned RegisterCost = computeOutlinedFunctionRegisterCost(C);
 
       // We have extra setup and save cost if we preserve the frame pointer.
@@ -1876,7 +1866,7 @@ private:
         RegisterCost += 3;
 
       NewFunctionCost += RegisterCost;
-      DEBUG(dbgs() << "Estimated register cost : " << RegisterCost << "\n");
+      LLVM_DEBUG(dbgs() << "Estimated register cost : " << RegisterCost << "\n");
 
       // No benefit.
       if (OutlineBenefit <= NewFunctionCost)
@@ -1964,7 +1954,7 @@ private:
     DenseMap<unsigned, unsigned> OccurToUsage;
 
     // Collect all of the occurrences and blocks that need to have their
-    //  usages computed.
+    // usages computed.
     for (Candidate &C : CandidateList) {
       if (!C.isValid())
         continue;
@@ -2059,16 +2049,16 @@ private:
       }
     }
 
-    DEBUG(dbgs() << "\n * Estimating spill cost per occurrence *\n");
-    DEBUG(dbgs() << " - Num Registers : " << NumRegisters << "\n");
+    LLVM_DEBUG(dbgs() << "\n * Estimating spill cost per occurrence *\n");
+    LLVM_DEBUG(dbgs() << " - Num Registers : " << NumRegisters << "\n");
     unsigned ViableRegisters = NumRegisters;
 
     // After we have the usages we rewalk the outline candidates and
-    //  incorporate that info into the cost model.
+    // incorporate that info into the cost model.
     for (Candidate &C : CandidateList) {
       if (!C.isValid())
         continue;
-      DEBUG(dbgs() << "\nCandidate : " << C.ID << "\n");
+      LLVM_DEBUG(dbgs() << "\nCandidate : " << C.ID << "\n");
       CandidateData &CD = OM.getCandidateData(C);
       unsigned NumOutputs = CD.Outputs.count();
       for (unsigned i = 0, e = C.size(); i < e; ++i) {
@@ -2094,12 +2084,12 @@ private:
         if (TotalUsage > ViableRegisters)
           Cost = TotalUsage - ViableRegisters;
 
-        DEBUG(dbgs() << "Occur " << i << "\n");
-        DEBUG(dbgs() << " - Usage : " << Usage << "\n");
-        DEBUG(dbgs() << " - Call Registers : " << CD.NumCallRegisters
-                     << "\n");
-        DEBUG(dbgs() << " - Outputs : " << NumOutputs << "\n");
-        DEBUG(dbgs() << " - Cost : " << Cost << "\n");
+        LLVM_DEBUG(dbgs() << "Occur " << i << "\n");
+        LLVM_DEBUG(dbgs() << " - Usage : " << Usage << "\n");
+        LLVM_DEBUG(dbgs() << " - Call Registers : " << CD.NumCallRegisters
+                          << "\n");
+        LLVM_DEBUG(dbgs() << " - Outputs : " << NumOutputs << "\n");
+        LLVM_DEBUG(dbgs() << " - Cost : " << Cost << "\n");
 
         if (C.Benefit <= Cost) {
           C.invalidate();
@@ -2120,7 +2110,7 @@ private:
   const DataLayout *Layout;
 };
 
-// \brief Outline all of the profitable candidates.
+// Outline all of the profitable candidates.
 void outlineCandidates(MutableArrayRef<Candidate> CL,
                        IROutlinerMapper &OM, bool HasProfileData) {
   FunctionSplicer FS(HasProfileData);
