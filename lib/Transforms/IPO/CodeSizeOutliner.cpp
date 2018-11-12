@@ -218,41 +218,42 @@ public:
     InstructionInfo *&Info = InstrInfo[InstrIdx];
     assert(!Info && "Instruction info already generated.");
     Info = new (InfoAllocator.Allocate()) InstructionInfo();
-    Instruction *Inst = getInstr(InstrIdx);
-    BasicBlock *InstPar = Inst->getParent();
+    Instruction *InputInst = getInstr(InstrIdx);
+    BasicBlock *BB = InputInst->getParent();
 
-    /// Inputs.
-    unsigned NumOperands = Inst->getNumOperands();
+    // Inputs.
+    unsigned NumOperands = InputInst->getNumOperands();
     Info->InputIndexes.reserve(NumOperands);
     for (unsigned InIt = 0; InIt < NumOperands; ++InIt) {
       unsigned IIdx = 0;
-      Value *Op = Inst->getOperand(InIt);
+      Value *Op = InputInst->getOperand(InIt);
+      if (isa<BasicBlock>(Op))
+	  break;
       Instruction *IOp = dyn_cast<Instruction>(Op);
-      if (IOp && IOp->getParent() == InstPar) {
+      if (IOp && IOp->getParent() == BB) {
         unsigned FoundIIdx = getInstrIdx(IOp);
         if (FoundIIdx <= InstrIdx)
           IIdx = FoundIIdx;
-      } else if (isa<BasicBlock>(Op))
-        break;
+      }
       Info->InputIndexes.emplace_back(IIdx);
     }
 
-    /// Outputs.
-    for (User *Usr : Inst->users()) {
-      Instruction *I = dyn_cast<Instruction>(Usr);
-      if (!I || I->getParent() != InstPar) {
+    // Outputs.
+    for (User *U : InputInst->users()) {
+      Instruction *UserInst = dyn_cast<Instruction>(U);
+      if (!UserInst || UserInst->getParent() != BB) {
         Info->FarthestInSameBlockOutput = -1;
         break;
       }
-      unsigned IIdx = getInstrIdx(I);
+      unsigned IIdx = getInstrIdx(UserInst);
       if (IIdx > Info->FarthestInSameBlockOutput)
         Info->FarthestInSameBlockOutput = IIdx;
     }
   }
 
-  ///
-  /// Candidate Information Utilities.
-  ///
+  //
+  // Candidate Information Utilities.
+  //
 
   // Get the data attached to the provided candidate.
   CandidateData &getCandidateData(const Candidate &C) {
@@ -323,7 +324,7 @@ private:
         // If the address comp is free then any globals won't affect the cost.
         if (HasFreeAddressComp)
           return true;
-        // Non Free address comp will likely need to load globals or values
+        // Non free address comp will likely need to load globals or values
         // used more than once.
         return !isa<Constant>(Ptr) && I->hasOneUse();
       };
@@ -344,16 +345,15 @@ private:
       GlobalVariable *GVar = dyn_cast<GlobalVariable>(GEP->getPointerOperand());
       if (!GVar)
         break;
-      if (HasFreeAddressComp) {
-        for (User *Usr : GVar->users()) {
-          Instruction *InstrUsr = dyn_cast<Instruction>(Usr);
-          if (!InstrUsr || InstrUsr == I)
-            continue;
-          if (InstrUsr->getFunction() != I->getFunction())
-            continue;
-          Cost = TargetTransformInfo::TCC_Free;
-          break;
-        }
+      if (!HasFreeAddressComp)
+	break;
+      for (User *Usr : GVar->users()) {
+        Instruction *InstrUsr = dyn_cast<Instruction>(Usr);
+	if (!InstrUsr || InstrUsr == I)
+          continue;
+        if (InstrUsr->getFunction() != I->getFunction())
+          continue;
+	Cost = TargetTransformInfo::TCC_Free;
         break;
       }
       break;
@@ -362,7 +362,6 @@ private:
       Cost = TTI.getUserCost(I);
       break;
     }
-
     // Accumulate additional cost from constant and global operands.
     for (auto OpI = I->op_begin(), OpE = I->op_end(); OpI != OpE; ++OpI) {
       Constant *COp = dyn_cast<Constant>(&*OpI);
@@ -397,21 +396,19 @@ private:
         return TargetTransformInfo::TCC_Basic;
     }
     // Otherwise compute the register usage of the call instead of just
-    // a param count.
+    // a parameter count.
     const DataLayout &Layout = CS.getParent()->getModule()->getDataLayout();
     unsigned WidestRegister = TTI.getRegisterBitWidth(false);
     // Collect the total size of the parameters.
     unsigned TotalParamSizeInBits = 0;
-    for (Value *Op : CS.args()) {
+    for (Value *Op : CS.args())
       TotalParamSizeInBits +=
           getTypeSize(Layout, Op->getType(), WidestRegister);
-    }
     // Potential reload for call return.
     if (!I->use_empty()) {
       Type *RetTy = CS.getType();
       TotalParamSizeInBits += getTypeSize(Layout, RetTy, WidestRegister);
     }
-    // Call instruction.
     unsigned CallCost = TargetTransformInfo::TCC_Basic;
     // Setting up the function pointer to be called.
     if (!F)
@@ -421,7 +418,7 @@ private:
     return CallCost;
   }
 
-  /// Stores information for parallel instruction in InstrVec.
+  /// Stores information for instructions in InstrVec.
   std::vector<InstructionInfo *> InstrInfo;
   SpecificBumpPtrAllocator<InstructionInfo> InfoAllocator;
 
@@ -430,7 +427,7 @@ private:
   SpecificBumpPtrAllocator<CandidateData> DataAlloc;
 };
 
-/// A specific instance of an outlined candidate.
+/// A specific instance of a candidate.
 struct FunctionSplicer {
   FunctionSplicer(bool EmitProfileData)
       : EmitProfileData(EmitProfileData), NumOutlined(0) {
@@ -461,9 +458,9 @@ struct FunctionSplicer {
     // Handle output type.
     LLVMContext &Ctx = OM.getInstr(InitialStartIdx)->getContext();
     unsigned NumOutputs = CD.Outputs.count();
-    if (NumOutputs == 0)
+    if (NumOutputs == 0) {
       OutputType = Type::getVoidTy(Ctx);
-    else if (NumOutputs == 1) {
+    } else if (NumOutputs == 1) {
       Instruction *OnlyOut =
           OM.getInstr(InitialStartIdx + CD.Outputs.find_first());
       OutputType = OnlyOut->getType();
@@ -480,7 +477,7 @@ struct FunctionSplicer {
     }
   }
 
-  // Outline a new occurrence of an outline chain.
+  // Outline a new occurrence of a candidate.
   void outlineOccurrence(const Candidate &C, unsigned StartIdx,
                          IROutlinerMapper &OM) {
     ++NumOccurrencesOutlined;
@@ -489,26 +486,26 @@ struct FunctionSplicer {
     bool InitialOccur = !OutlinedFn;
     CandidateData &CD = OM.getCandidateData(C);
 
-    /// Split the outline chain into its own block.
+    // Split the candidate into its own block.
     Instruction *Head = OM.getInstr(StartIdx);
     BasicBlock *EntryBlock = Head->getParent();
     // Split our chain instance into a separate block for extraction.
-    /// Split up to the head if we aren't at the front of our block.
+    // Split up to the head if we aren't at the front of our block.
     if (Head != &EntryBlock->front() ||
         EntryBlock == &ParentFn->getEntryBlock())
       EntryBlock = EntryBlock->splitBasicBlock(Head->getIterator());
-    /// Split after the tail.
+    // Split after the tail.
     BasicBlock *Exit = nullptr;
     if (!isa<TerminatorInst>(Tail)) {
-      auto SentinalIt = Tail->getNextNode()->getIterator();
-      Exit = EntryBlock->splitBasicBlock(SentinalIt);
+      auto SentinelIt = Tail->getNextNode()->getIterator();
+      Exit = EntryBlock->splitBasicBlock(SentinelIt);
     }
 
     // Create a new block to patch the outlined section.
     BasicBlock *OutlineBlock =
         BasicBlock::Create(ParentFn->getContext(), "cso.patch", ParentFn);
 
-    // Create parameter vec for the new call.
+    // Create parameter vector for the new call.
     unsigned NumOutputs = CD.Outputs.count();
     std::vector<Value *> Args;
     Args.reserve(CD.InputSeq.size());
@@ -550,21 +547,21 @@ struct FunctionSplicer {
         Instruction *CurII = OM.getInstr(CurI);
         // Make sure the alignment is valid as we skip it during congruency
         // finding.
-        if (LoadInst *LI = dyn_cast<LoadInst>(InitII))
+        if (LoadInst *LI = dyn_cast<LoadInst>(InitII)) {
           LI->setAlignment(std::min(LI->getAlignment(),
                                     cast<LoadInst>(CurII)->getAlignment()));
-        else if (StoreInst *SI = dyn_cast<StoreInst>(InitII))
+        } else if (StoreInst *SI = dyn_cast<StoreInst>(InitII)) {
           SI->setAlignment(std::min(SI->getAlignment(),
                                     cast<StoreInst>(CurII)->getAlignment()));
-        // Make sure that no tails are propagated properly.
-        else if (CallInst *CI = dyn_cast<CallInst>(InitII)) {
+        } else if (CallInst *CI = dyn_cast<CallInst>(InitII)) {
+	  // Make sure that no tails are propagated properly.
           auto TCK = cast<CallInst>(CurII)->getTailCallKind();
           if (TCK != CallInst::TCK_Tail)
             CI->setTailCallKind(TCK);
-        }
-        // Be conservative about flags like nsw/nuw.
-        else
+        } else {
+          // Be conservative about flags like nsw/nuw.
           InitII->andIRFlags(OM.getInstr(CurI));
+	}
 
         // Merge metadata.
         DebugLoc DL = InitII->getDebugLoc();
@@ -898,7 +895,7 @@ private:
       InputInst->setOperand(I.OpNo, &*ArgI++);
     }
 
-    /// Insert the constant param fixups.
+    /// Insert the constant parameter fixups.
     for (ConstantCondenseInstance &CInst : CD.ConstInsts) {
       Input &BaseInput = CInst.BaseInput;
       Value *CArg =
