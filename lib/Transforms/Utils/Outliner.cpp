@@ -120,10 +120,10 @@ private:
     // If the names aren't unique enough yet, we recurse until they are.
     size_t S1Start = N - N1;
     int *S1 = SA.data() + S1Start;
-    if (Name < N1)
+    if (Name < N1) {
       computeSAIS(ArrayRef<int>(S1, N1), N1, Name - 1);
-    // Otherwise we can compute the suffix array directly.
-    else {
+    } else {
+      // Otherwise we can compute the suffix array directly.
       for (int i = 0; i < N1; ++i)
         SA[S1[i]] = i;
     }
@@ -167,9 +167,10 @@ private:
         Sum += Bucket[i];
         Bucket[i] = Sum - Bucket[i];
       }
-    } else
+    } else {
       for (size_t i = 0; i <= AlphabetSize; ++i)
         Bucket[i] = Sum += Bucket[i];
+    }
   }
 
   // Compute SA1
@@ -300,8 +301,9 @@ bool llvm::findSequentialCandidates(
           CandidateInterval.set(JIdx, JIdx + Size);
           Occurrences.push_back(JIdx);
           AddedNewOccurrence = true;
-        } else
+        } else {
           FailedOccurrences.insert(JIdx);
+	}
 
         // If our next size is less than the current, we won't get any more
         //  candidates for this chain.
@@ -431,17 +433,16 @@ public:
     CallSite CS(Inst);
     if (CS) {
       // Don't take the address of inline asm calls.
-      if (CS.isInlineAsm() || CS.isInvoke())
+      if (CS.isInlineAsm() || CS.isInvoke()) {
         SS = RelaxedExpression::ConstrainedCall;
-      // Intrinsics and functions without exact definitions can not
-      // have their address taken.
-      else if (Function *F = CS.getCalledFunction()) {
+      } else if (Function *F = CS.getCalledFunction()) {
+	// Intrinsics and functions without exact definitions can not
+	// have their address taken.
         if (!canTakeFnAddress(F))
           SS = RelaxedExpression::ConstrainedCall;
       }
-    }
-    // Struct geps require constant indices.
-    else if (GetElementPtrInst *GEP = dyn_cast<GetElementPtrInst>(&I)) {
+    } else if (GetElementPtrInst *GEP = dyn_cast<GetElementPtrInst>(&I)) {
+      // Struct geps require constant indices.
       if (gepContainsStructType(GEP))
         SS = RelaxedExpression::StructGep;
     }
@@ -467,11 +468,12 @@ public:
         if (!L->hasIdenticalOperandBundleSchema(*R))
           return false;
       }
-    } else if (isa<BitCastInst>(Inst))
+    } else if (isa<BitCastInst>(Inst)) {
       return Inst->getType() == OE.Inst->getType();
-    else if (!Inst->isSameOperationAs(OE.Inst,
-                                      Instruction::CompareIgnoringAlignment))
+    } else if (!Inst->isSameOperationAs(OE.Inst,
+					Instruction::CompareIgnoringAlignment)) {
       return false;
+    }
     return checkSpecialEquivalence(OE);
   }
   hash_code getComputedHash() const {

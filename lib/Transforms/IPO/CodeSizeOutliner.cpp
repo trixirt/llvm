@@ -375,11 +375,11 @@ private:
           continue;
         Cost += TTI.getIntImmCodeSizeCost(I->getOpcode(), OpI->getOperandNo(),
                                           CI->getValue(), CI->getType());
-      }
-      // If we don't have free address computation any use of globals
-      // can actually result in more cost.
-      else if (!HasFreeAddressComp)
+      } else if (!HasFreeAddressComp) {
+        // If we don't have free address computation any use of globals
+	// can actually result in more cost.
         Cost += getGlobalValueCost(COp);
+      }
     }
     return Cost;
   }
@@ -576,9 +576,9 @@ struct FunctionSplicer {
 
       // Make sure that all of the parameters are the correct type.
       FunctionType *FTy = OutlinedFn->getFunctionType();
-      for (unsigned i = 0, e = Args.size(); i < e; ++i) {
-        Value *&Arg = Args[i];
-        Type *ParamTy = FTy->getParamType(i);
+      for (size_t Idx = 0; Idx < Args.size(); ++Idx) {
+        Value *&Arg = Args[Idx];
+        Type *ParamTy = FTy->getParamType(Idx);
         if (ParamTy != Arg->getType())
           Arg = CastInst::Create(CastInst::BitCast, Arg, ParamTy, "",
                                  OutlineBlock);
@@ -599,8 +599,8 @@ struct FunctionSplicer {
       NewII->setCallingConv(OutlinedFn->getCallingConv());
       NewII->setDebugLoc(CallLoc);
       PatchupI = NewII;
-      // Otherwise create a call instruction.
     } else {
+      // Otherwise create a call instruction.
       CallInst *CI = CallInst::Create(OutlinedFn, Args, "", OutlineBlock);
       CI->setCallingConv(OutlinedFn->getCallingConv());
       CI->setDebugLoc(CallLoc);
@@ -876,9 +876,9 @@ private:
     // Create stores for any output variables.
     Value *RetVal = nullptr;
     unsigned NumOutputs = CD.Outputs.count();
-    if (NumOutputs == 1)
+    if (NumOutputs == 1) {
       RetVal = OM.getInstr(StartIdx + CD.Outputs.find_first());
-    else if (NumOutputs != 0) {
+    } else if (NumOutputs != 0) {
       RetVal = UndefValue::get(OutputType);
       unsigned OutputNum = 0;
       for (size_t OutputIdx : CD.Outputs) {
@@ -1731,10 +1731,10 @@ private:
             if (Info.InputIndexes[0] < FirstOccur ||
                 Info.InputIndexes[1] < FirstOccur) {
               CostPerOccurence += FoldedCost;
-            }
-            // If they are then we remove the folded cost.
-            else
+            } else {
+	      // If they are then we remove the folded cost.
               ChainCost -= FoldedCost;
+	    }
           }
           break;
         }
@@ -1856,10 +1856,10 @@ private:
           FirstOccurFn->hasFnAttribute("no-frame-pointer-elim-non-leaf");
       bool NeedsFramePointer = false;
       // Check for non leaf frame pointer elim.
-      if (ElimNonLeaf)
+      if (ElimNonLeaf) {
         NeedsFramePointer = ContainsCall;
-      // Check for leaf frame pointer elim.
-      else if (FirstOccurFn->hasFnAttribute("no-frame-pointer-elim")) {
+      } else if (FirstOccurFn->hasFnAttribute("no-frame-pointer-elim")) {
+	// Check for leaf frame pointer elim.
         Attribute Attr = FirstOccurFn->getFnAttribute("no-frame-pointer-elim");
         NeedsFramePointer = Attr.getValueAsString() == "true";
       }
