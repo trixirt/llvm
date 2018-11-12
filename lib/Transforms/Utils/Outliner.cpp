@@ -75,7 +75,7 @@ private:
 
     // Stage 1: Reduce the problem and bucket sort all S-substrings.
     Bucket.resize(AlphabetSize + 1);
-    /// Get the bucket ends.
+    // Get the bucket ends.
     getBuckets(S, true, N, AlphabetSize);
     for (int i = 0; i < N; ++i)
       SA[i] = -1;
@@ -85,14 +85,14 @@ private:
     induceSA(S, LTypeArray, N, AlphabetSize);
     Bucket.clear();
 
-    /// Compact the sorted substrings into the first N1 items of the suffix
-    /// array.
+    // Compact the sorted substrings into the first N1 items of the suffix
+    // array.
     int N1 = 0;
     for (int i = 0; i < N; ++i)
       if (isLMS(SA[i], LTypeArray))
         SA[N1++] = SA[i];
 
-    /// Find the lexicographic names of the substrings.
+    // Find the lexicographic names of the substrings.
     for (int i = N1; i < N; ++i)
       SA[i] = -1;
     int Name = 0, Prev = -1;
@@ -117,7 +117,7 @@ private:
         SA[j--] = SA[i];
 
     // Stage 2: Solve the reduced problem.
-    /// If the names aren't unique enough yet, we recurse until they are.
+    // If the names aren't unique enough yet, we recurse until they are.
     size_t S1Start = N - N1;
     int *S1 = SA.data() + S1Start;
     if (Name < N1)
@@ -130,16 +130,16 @@ private:
 
     // Stage 3: Induce the result from the reduced solution.
     Bucket.resize(AlphabetSize + 1);
-    /// Place the LMS characters into their respective buckets.
+    // Place the LMS characters into their respective buckets.
     getBuckets(S, true, N, AlphabetSize);
-    /// Get P1.
+    // Get P1.
     for (int i = 1, j = 0; i < N; ++i)
       if (isLMS(i, LTypeArray))
         S1[j++] = i;
-    /// Get the index in S.
+    // Get the index in S.
     for (int i = 0; i < N1; ++i)
       SA[i] = S1[SA[i]];
-    /// Initialize the suffix array from N1 to N - 1.
+    // Initialize the suffix array from N1 to N - 1.
     for (int i = N1; i < N; ++i)
       SA[i] = -1;
     for (int i = N1 - 1; i >= 0; --i) {
@@ -156,9 +156,9 @@ private:
   }
   template <typename T>
   void getBuckets(ArrayRef<T> S, bool End, unsigned N, unsigned AlphabetSize) {
-    /// Clear buckets.
+    // Clear buckets.
     Bucket.assign(AlphabetSize + 1, 0);
-    /// Compute the size of each bucket.
+    // Compute the size of each bucket.
     for (size_t i = 0, e = S.size(); i < e; ++i)
       ++Bucket[S[i]];
     int Sum = 0;
@@ -314,13 +314,13 @@ bool llvm::findSequentialCandidates(
       if (AddedNewOccurrence && Occurrences.size() >= MinOccurrences) {
         // Recheck the prune size each iteration.
         if (!PrePruneFn || !PrePruneFn(Occurrences, Size)) {
-          /// Cache shared sizes between candidates chains to make analysis
-          /// easier.
+          // Cache shared sizes between candidates chains to make analysis
+          // easier.
           if (HasPreviousSharedOccurrence)
             CL.back().SharedSizeWithNext = Size;
           else
             HasPreviousSharedOccurrence = true;
-          /// Build new function with candidate sequence.
+          // Build new function with candidate sequence.
           CL.emplace_back(CL.size(), Size, Occurrences);
         }
       }
@@ -417,7 +417,7 @@ bool llvm::pruneSequentialCandidateList(
   return HasProfitableCandidate;
 }
 
-/// Mapping an IR module for outlining.
+// Mapping an IR module for outlining.
 
 /// Expression with relaxed equivalency constraints.
 class RelaxedExpression {
@@ -430,17 +430,17 @@ public:
     // Check the special state.
     CallSite CS(Inst);
     if (CS) {
-      /// Don't take the address of inline asm calls.
+      // Don't take the address of inline asm calls.
       if (CS.isInlineAsm() || CS.isInvoke())
         SS = RelaxedExpression::ConstrainedCall;
-      /// Intrinsics and functions without exact definitions can not
-      /// have their address taken.
+      // Intrinsics and functions without exact definitions can not
+      // have their address taken.
       else if (Function *F = CS.getCalledFunction()) {
         if (!canTakeFnAddress(F))
           SS = RelaxedExpression::ConstrainedCall;
       }
     }
-    /// Struct geps require constant indices.
+    // Struct geps require constant indices.
     else if (GetElementPtrInst *GEP = dyn_cast<GetElementPtrInst>(&I)) {
       if (gepContainsStructType(GEP))
         SS = RelaxedExpression::StructGep;
@@ -542,28 +542,28 @@ private:
       case Intrinsic::memmove:
       case Intrinsic::memcpy:
       case Intrinsic::memset:
-        /// Size.
+        // Size.
         return LCS.getArgOperand(2) == RCS.getArgOperand(2) &&
-               /// Volatile flag.
+               // Volatile flag.
                LCS.getArgOperand(3) == RCS.getArgOperand(3);
       case Intrinsic::objectsize:
-        /// Min.
+        // Min.
         return LCS.getArgOperand(1) == RCS.getArgOperand(1) &&
-               /// Null unknown.
+               // Null unknown.
                LCS.getArgOperand(2) == RCS.getArgOperand(2);
       case Intrinsic::expect:
-        /// Expected value.
+        // Expected value.
         return LCS.getArgOperand(1) == RCS.getArgOperand(1);
       case Intrinsic::prefetch:
-        /// RW.
+        // RW.
         return LCS.getArgOperand(1) == RCS.getArgOperand(1) &&
-               /// Locality.
+               // Locality.
                LCS.getArgOperand(2) == RCS.getArgOperand(2) &&
-               /// Cache Type.
+               // Cache Type.
                LCS.getArgOperand(3) == RCS.getArgOperand(3);
       case Intrinsic::ctlz:
       case Intrinsic::cttz:
-        /// Is Zero Undef.
+        // Is Zero Undef.
         return LCS.getArgOperand(1) == RCS.getArgOperand(1);
       case Intrinsic::invariant_start:
         // Size.
@@ -723,10 +723,10 @@ llvm::mapIRModule(OutlinerMapper &OM, Module &M, ProfileSummaryInfo *PSI,
   std::vector<unsigned> CCVec;
   unsigned CCID = 1, IllegalID = UINT_MAX;
 
-  /// Memory management for the GVN expressions used for congruency.
+  // Memory management for the GVN expressions used for congruency.
   SpecificBumpPtrAllocator<RelaxedExpression> ExpressionAllocator;
 
-  /// Mapping of expression to congruency id.
+  // Mapping of expression to congruency id.
   using GlobalCongruencyMapTy =
       std::array<DenseMap<const RelaxedExpression *, unsigned>,
                  Instruction::OtherOpsEnd>;

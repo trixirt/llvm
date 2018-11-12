@@ -175,8 +175,9 @@ unsigned getGlobalValueCost(const Constant *C) {
     if (const ConstantInt *CI = dyn_cast<ConstantInt>(COp)) {
       if (!CI->isZero())
         ++Cost;
-    } else
+    } else {
       ++Cost;
+    }
   }
   return Cost;
 }
@@ -583,9 +584,10 @@ struct FunctionSplicer {
                                  OutlineBlock);
       }
 
+    } else {
       // Otherwise we outline the initial occurrence.
-    } else
       outlineInitialOccurrence(C, OM, StartIdx, Args, EntryBlock);
+    }
 
     // Create the patchup for the outline section.
     Instruction *PatchupI;
@@ -731,9 +733,9 @@ private:
         BitVector &LhsGroup = ArgCongruencyGroups[ArgNoToCG[i]];
         BitVector &RhsGroup = RhsArgCGroups[RhsArgNoToCG[i]];
 
-        /// Build non congruent arguments between the groups.
+        // Build non congruent arguments between the groups.
         NonCongruentLeft = LhsGroup;
-        /// Congruent matches.
+        // Congruent matches.
         LhsGroup &= RhsGroup;
         assert(LhsGroup.count() > 0);
 
@@ -775,7 +777,7 @@ private:
     MergedFn->takeName(OutlinedFn);
     MergedFn->copyAttributesFrom(OutlinedFn);
 
-    /// Move Fn Body.
+    // Move Fn Body.
     MergedFn->getBasicBlockList().splice(MergedFn->begin(),
                                          OutlinedFn->getBasicBlockList());
 
@@ -793,10 +795,10 @@ private:
       CallSite CS(OldI);
       ++U;
       CallArgs.clear();
-      /// Map call args by their congruency group.
+      // Map call args by their congruency group.
       for (auto &It : ArgCongruencyGroups)
         CallArgs.push_back(CS.getArgOperand(It.find_first()));
-      /// Create the new call.
+      // Create the new call.
       Instruction *NewI;
       if (CallInst *CI = dyn_cast<CallInst>(OldI)) {
         CallInst *NewCall = CallInst::Create(MergedFn, CallArgs, "", CI);
@@ -809,8 +811,9 @@ private:
                                II->getUnwindDest(), CallArgs, "", II);
         NewCall->setCallingConv(II->getCallingConv());
         NewI = NewCall;
-      } else
+      } else {
         llvm_unreachable("Invalid callsite for outlined function.");
+      }
       NewI->setDebugLoc(OldI->getDebugLoc());
       OldI->replaceAllUsesWith(NewI);
       OldI->eraseFromParent();
@@ -825,14 +828,14 @@ private:
                                 ArrayRef<Value *> Args, BasicBlock *Entry) {
     Function *ParentFn = Entry->getParent();
 
-    /// Function type for outlined function.
+    // Function type for outlined function.
     SmallVector<Type *, 8> Tys;
     Tys.reserve(Args.size());
     for (Value *Arg : Args)
       Tys.push_back(Arg->getType());
     FunctionType *FTy = FunctionType::get(OutputType, Tys, false);
 
-    /// Create function and move outlined block.
+    // Create function and move outlined block.
     OutlinedFn = Function::Create(FTy, GlobalValue::PrivateLinkage, "",
                                   Entry->getModule());
     OutlinedFn->setCallingConv(CallingConv::Fast);
@@ -842,7 +845,7 @@ private:
         OutlinedFn->end(), Entry->getParent()->getBasicBlockList(),
         Entry->getIterator());
 
-    /// Inherit attributes.
+    // Inherit attributes.
     LLVMContext &Ctx = OutlinedFn->getContext();
     AttributeSet AttrsToAdd =
         ParentFn->getAttributes().getAttributes(AttributeList::FunctionIndex);
@@ -870,7 +873,7 @@ private:
     if (!isa<InvokeInst>(CurTerm))
       CurTerm->eraseFromParent();
 
-    /// Create stores for any output variables.
+    // Create stores for any output variables.
     Value *RetVal = nullptr;
     unsigned NumOutputs = CD.Outputs.count();
     if (NumOutputs == 1)
@@ -888,14 +891,14 @@ private:
     }
     ReturnInst::Create(Ctx, RetVal, Entry);
 
-    /// Replace input operands with function arguments.
+    // Replace input operands with function arguments.
     auto ArgI = OutlinedFn->arg_begin();
     for (Input &I : CD.InputSeq) {
       Instruction *InputInst = OM.getInstr(StartIdx + I.InstrNo);
       InputInst->setOperand(I.OpNo, &*ArgI++);
     }
 
-    /// Insert the constant parameter fixups.
+    // Insert the constant parameter fixups.
     for (ConstantCondenseInstance &CInst : CD.ConstInsts) {
       Input &BaseInput = CInst.BaseInput;
       Value *CArg =
@@ -915,7 +918,7 @@ private:
       }
     }
 
-    /// Cleanup for ignored instructions.
+    // Cleanup for ignored instructions.
     for (auto It = Entry->begin(), E = Entry->end(); It != E;) {
       Instruction &I = *It;
       ++It;
@@ -1160,8 +1163,9 @@ private:
               Counts[InsertIdx] = Counts[i];
               RemapOccurIdxs(i, InsertIdx);
               VerificationCands[InsertIdx++] = std::move(VerificationCands[i]);
-            } else
+            } else {
               ++InsertIdx;
+	    }
           }
         }
         VerificationCands.resize(InsertIdx);
@@ -1458,8 +1462,9 @@ private:
           if (InitialCollect) {
             InstDiff.emplace_back(Diff);
             InstMemberships.set(NextCIntNum + ConstIntNum + 1);
-          } else if (InstDiff[NextCIntNum] != Diff)
+          } else if (InstDiff[NextCIntNum] != Diff) {
             InstMemberships.reset(NextCIntNum + ConstIntNum + 1);
+	  }
         }
         // No condensable constants.
         if (InstMemberships.none()) {
@@ -1523,7 +1528,7 @@ private:
       Candidate &C = CandidateList[i];
       CandidateData &CD = OM.getCandidateData(C);
 
-      /// No inputs.
+      // No inputs.
       if (C.size() == 0 || CD.InputSeq.empty())
         continue;
 
@@ -1619,7 +1624,7 @@ private:
       Candidate &C = CandidateList[i];
       CandidateData &CD = OM.getCandidateData(C);
 
-      /// Reset benefit metrics.
+      // Reset benefit metrics.
       C.invalidate();
 
       // Sanity check.
@@ -1630,16 +1635,16 @@ private:
       LLVM_DEBUG(dbgs() << "Num : " << NumOccurences << "; Len : " << C.Len
                         << "\n");
 
-      /// Use the first occurrence as an example for cost analysis.
+      // Use the first occurrence as an example for cost analysis.
       unsigned FirstOccur = *C.begin();
-      /// Cost for each occurrence of the candidate.
+      // Cost for each occurrence of the candidate.
       unsigned CostPerOccurence = 0;
-      /// Cost for the outlined function.
+      // Cost for the outlined function.
       unsigned NewFunctionCost = 0;
-      /// If this outline sequence contains a call.
+      // If this outline sequence contains a call.
       bool ContainsCall = false;
 
-      /// New function contains a return.
+      // New function contains a return.
       NewFunctionCost += 1;
       MaterializedValues.clear();
 
@@ -1700,8 +1705,9 @@ private:
           } else if (L->getOpcode() == Instruction::Shl) {
             if (R->getOpcode() != Instruction::LShr)
               break;
-          } else
+          } else {
             break;
+	  }
 
           // Helper to get a constant value if it exists.
           auto AccumulateConstantIntVal = [&](Value *V) -> bool {
@@ -1735,7 +1741,7 @@ private:
         }
       }
 
-      /// Estimate inputs/outputs to this function.
+      // Estimate inputs/outputs to this function.
       unsigned TotalParamSize = 0;
       unsigned NumPtrInputs = 0;
 
@@ -1770,24 +1776,24 @@ private:
           ChainCost -= getGlobalValueCost(COp);
       }
 
-      /// The new function contains one instance of the chain of instructions.
+      // The new function contains one instance of the chain of instructions.
       NewFunctionCost += ChainCost;
       // Add the cost of constant materialization.
       NewFunctionCost += MaterializedValues.size();
 
-      /// Add the cost for each output.
+      // Add the cost for each output.
       unsigned CostFromReLoad = 0;
       for (size_t OutputIdx : CD.Outputs) {
         Type *ParamEleTy = OM.getInstr(FirstOccur + OutputIdx)->getType();
         unsigned EstCost =
             getRegisterUsage(*Layout, ParamEleTy, WidestRegister);
 
-        /// There will be a store into this variable in the outlined function.
+        // There will be a store into this variable in the outlined function.
         NewFunctionCost += EstCost;
 
-        /// Each output value has a reload in the parent function.
-        /// NOTE: This isn't entirely true if a specific instance doesn't use
-        /// the value.
+        // Each output value has a reload in the parent function.
+        // NOTE: This isn't entirely true if a specific instance doesn't use
+        // the value.
         CostFromReLoad += EstCost;
       }
 
@@ -1795,8 +1801,8 @@ private:
       unsigned NumCallRegisters = TotalParamSize / WidestRegister;
       unsigned NumRegisters = TTI.getNumberOfRegisters(false);
 
-      /// A call is generated at each occurence.
-      /// = call instruction + prepare each parameter + reload outputs.
+      // A call is generated at each occurence.
+      // = call instruction + prepare each parameter + reload outputs.
       CostPerOccurence += 1 + NumCallRegisters + CostFromReLoad;
 
       LLVM_DEBUG(dbgs() << "Inputs : " << CD.InputSeq.size() << "["
@@ -1809,8 +1815,8 @@ private:
       if (CostPerOccurence >= ChainCost)
         continue;
 
-      /// Add the cost of the constant input condensing.
-      /// Each of the fixups will likely result in an add instruction.
+      // Add the cost of the constant input condensing.
+      // Each of the fixups will likely result in an add instruction.
       for (ConstantCondenseInstance &CInst : CD.ConstInsts) {
         if (CInst.Cost == 0)
           continue;
