@@ -608,16 +608,19 @@ struct FunctionSplicer {
     }
 
     // Replace uses of outputs and create reloads.
-    if (NumOutputs == 1) {
-      Instruction *OnlyOut = OM.getInstr(StartIdx + CD.Outputs.find_first());
-      OnlyOut->replaceUsesOutsideBlock(PatchupI, EntryBlock);
-    } else if (NumOutputs != 0) {
-      unsigned OutputNum = 0;
-      for (size_t OutputIdx : CD.Outputs) {
-        Instruction *Out = OM.getInstr(StartIdx + OutputIdx);
-        Value *Reload =
+    if (NumOutputs > 0) {
+      if (NumOutputs == 1) {
+        Instruction *OnlyOut = OM.getInstr(StartIdx + CD.Outputs.find_first());
+        OnlyOut->replaceUsesOutsideBlock(PatchupI, EntryBlock);
+      } else {
+	// NumOutputs > 1
+	unsigned OutputNum = 0;
+        for (size_t OutputIdx : CD.Outputs) {
+          Instruction *Out = OM.getInstr(StartIdx + OutputIdx);
+          Value *Reload =
             ExtractValueInst::Create(PatchupI, OutputNum++, "", OutlineBlock);
-        Out->replaceUsesOutsideBlock(Reload, EntryBlock);
+          Out->replaceUsesOutsideBlock(Reload, EntryBlock);
+	}
       }
     }
 
@@ -688,7 +691,7 @@ private:
                                 std::vector<BitVector> &ArgCGroups) {
       ArgCGroups.reserve(NumInputs);
       for (unsigned i = 0, e = NumInputs; i < e; ++i) {
-        // We already evaluated the equivalencies for this arg.
+        // We already evaluated the equivalencies for this argument.
         if (ANoToCG.count(i))
           continue;
         Value *Op = CS.getArgOperand(i);
@@ -719,7 +722,7 @@ private:
       return;
     // Check every other user to see if the equivalencies hold up.
     BitVector ResolvedInputs(NumInputs);
-    // BitVector helper to hold non congruent matches between argument groups.
+    // BitVector helper to hold non-congruent matches between argument groups.
     BitVector NonCongruentLeft;
     for (auto UserE = OutlinedFn->user_end(); UserIt != UserE; ++UserIt) {
       CallSite CS(cast<Instruction>(*UserIt));
@@ -733,13 +736,13 @@ private:
         BitVector &LhsGroup = ArgCongruencyGroups[ArgNoToCG[i]];
         BitVector &RhsGroup = RhsArgCGroups[RhsArgNoToCG[i]];
 
-        // Build non congruent arguments between the groups.
+        // Build non-congruent arguments between the groups.
         NonCongruentLeft = LhsGroup;
         // Congruent matches.
         LhsGroup &= RhsGroup;
         assert(LhsGroup.count() > 0);
 
-        // Non congruent sets on both sides still act as a congruency group.
+        // non-congruent sets on both sides still act as a congruency group.
         NonCongruentLeft ^= LhsGroup;
 
         // Mark arguments as handled.
@@ -748,12 +751,12 @@ private:
         if (NonCongruentLeft.count() == 0)
           continue;
 
-        // Move the non congruent matches from the left group to a
+        // Move the non-congruent matches from the left group to a
         // new congruency group.
         unsigned NewGroupId = ArgCongruencyGroups.size();
         ArgCongruencyGroups.emplace_back(std::move(NonCongruentLeft));
 
-        // Move non congruent matches to a new congruency group
+        // Move non-congruent matches to a new congruency group
         // and remove them from the top level mapping.
         for (unsigned SetBit : ArgCongruencyGroups.back().set_bits())
           ArgNoToCG[SetBit] = NewGroupId;
@@ -764,7 +767,7 @@ private:
     if (NumInputs == ArgCongruencyGroups.size())
       return;
 
-    // Build new function from the condensed inputs.
+    // Build a new function from the condensed inputs.
     std::vector<Type *> NewFnTys;
     for (auto &It : ArgCongruencyGroups)
       NewFnTys.push_back(CurFnTy->getParamType(It.find_first()));
@@ -777,7 +780,7 @@ private:
     MergedFn->takeName(OutlinedFn);
     MergedFn->copyAttributesFrom(OutlinedFn);
 
-    // Move Fn Body.
+    // Move function body.
     MergedFn->getBasicBlockList().splice(MergedFn->begin(),
                                          OutlinedFn->getBasicBlockList());
 
@@ -876,17 +879,20 @@ private:
     // Create stores for any output variables.
     Value *RetVal = nullptr;
     unsigned NumOutputs = CD.Outputs.count();
-    if (NumOutputs == 1) {
-      RetVal = OM.getInstr(StartIdx + CD.Outputs.find_first());
-    } else if (NumOutputs != 0) {
-      RetVal = UndefValue::get(OutputType);
-      unsigned OutputNum = 0;
-      for (size_t OutputIdx : CD.Outputs) {
-        Instruction *Out = OM.getInstr(StartIdx + OutputIdx);
-        InsertValueInst *Insert =
+    if (NumOutputs > 0) {
+      if (NumOutputs == 1) {
+	RetVal = OM.getInstr(StartIdx + CD.Outputs.find_first());
+      } else {
+	// NumOutputs > 1
+	RetVal = UndefValue::get(OutputType);
+	unsigned OutputNum = 0;
+	for (size_t OutputIdx : CD.Outputs) {
+          Instruction *Out = OM.getInstr(StartIdx + OutputIdx);
+	  InsertValueInst *Insert =
             InsertValueInst::Create(RetVal, Out, OutputNum++);
-        Insert->insertAfter(Out);
-        RetVal = Insert;
+	  Insert->insertAfter(Out);
+	  RetVal = Insert;
+	}
       }
     }
     ReturnInst::Create(Ctx, RetVal, Entry);
@@ -942,7 +948,7 @@ private:
   Function *OutlinedFn = nullptr;
   /// Function output type.
   Type *OutputType = nullptr;
-  /// If we are emitting profile date during outlining.
+  /// Set if we are emitting profile date during outlining.
   bool EmitProfileData;
   /// The index of the initial occurrence for the current splice.
   unsigned InitialStartIdx;
@@ -952,7 +958,7 @@ private:
   unsigned NumOutlined;
 };
 
-/// Perform analysis and verification for the found outline candidates.
+/// Perform analysis and verification on the candidates.
 struct OutlinerAnalysis {
   OutlinerAnalysis(IROutlinerMapper &OM,
                    std::vector<Candidate> &CandidateList,
