@@ -154,11 +154,11 @@ static cl::opt<bool> EnableGVNSink(
 
 static cl::opt<bool> EnableCSO(
   "enable-cso", cl::init(false), cl::Hidden,
-  cl::desc("Enable outlining for code size (default = off)"));
+  cl::desc("Enable ir outlining size (default = off)"));
 
 static cl::opt<bool> EnableEarlyCSO(
   "enable-early-cso", cl::init(false), cl::Hidden,
-  cl::desc("Enable an early run of the code size outliner pass (default = off)"));
+  cl::desc("Enable an early run of the ir outliner pass (default = off)"));
 
 PassManagerBuilder::PassManagerBuilder() {
     OptLevel = 2;
@@ -522,10 +522,10 @@ void PassManagerBuilder::populateModulePassManager(
   if (!PerformThinLTO && !PrepareForThinLTOUsingPGOSampleProfile)
     addPGOInstrPasses(MPM);
 
-  // Add an early run of the code size outliner pass.
+  // Add an early run of the ir outliner pass.
   if (EnableEarlyCSO && SizeLevel > 0) {
     MPM.add(createSeparateConstOffsetFromGEPPass());
-    MPM.add(createCodeSizeOutlinerPass());
+    MPM.add(createIROutlinerPass());
     MPM.add(createPostOrderFunctionAttrsLegacyPass());
   }
 
@@ -721,9 +721,9 @@ void PassManagerBuilder::populateModulePassManager(
     MPM.add(createConstantMergePass());     // Merge dup global constants
   }
 
-  // Add a late run of the code size outliner pass.
+  // Add a late run of the ir outliner pass.
   if (EnableCSO && SizeLevel > 0) {
-    MPM.add(createCodeSizeOutlinerPass());
+    MPM.add(createIROutlinerPass());
     MPM.add(createTailCallEliminationPass());
     MPM.add(createPostOrderFunctionAttrsLegacyPass());
   }
@@ -907,8 +907,8 @@ void PassManagerBuilder::addLTOOptimizationPasses(legacy::PassManagerBase &PM) {
 
 void PassManagerBuilder::addLateLTOOptimizationPasses(
     legacy::PassManagerBase &PM) {
-  // Add a late run of the code size outliner pass.
-  PM.add(createCodeSizeOutlinerPass());
+  // Add a late run of the ir outliner pass.
+  PM.add(createIROutlinerPass());
 
   // Delete basic blocks, which optimization passes may have killed.
   PM.add(createCFGSimplificationPass());

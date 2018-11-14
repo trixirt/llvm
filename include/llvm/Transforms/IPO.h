@@ -215,9 +215,8 @@ ModulePass *createBarrierNoopPass();
 /// indicating the set of functions they may target at run-time.
 ModulePass *createCalledValuePropagationPass();
 
-/// createCodeSizeOutlinerPass - This pass outlines congruent parts of
-/// functions.
-ModulePass *createCodeSizeOutlinerPass();
+/// createIROutlinerPass - This pass outlines at the ir level
+ModulePass *createIROutlinerPass();
 
 /// What to do with the summary when running passes that operate on it.
 enum class PassSummaryAction {

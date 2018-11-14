@@ -657,7 +657,7 @@ PassBuilder::buildModuleSimplificationPipeline(OptimizationLevel Level,
 
   // Add an early code size outlining pass.
   if (EnableEarlyCSO && isOptimizingForSize(Level))
-    MPM.addPass(CodeSizeOutlinerPass());
+    MPM.addPass(IROutlinerPass());
 
   // Require the GlobalsAA analysis for the module so we can query it within
   // the CGSCC pipeline.
@@ -857,7 +857,7 @@ PassBuilder::buildModuleOptimizationPipeline(OptimizationLevel Level,
 
   // Add the late outlining pass.
   if(isOptimizingForSize(Level))
-    MPM.addPass(CodeSizeOutlinerPass());
+    MPM.addPass(IROutlinerPass());
 
   // Now we need to do some global optimization transforms.
   // FIXME: It would seem like these should come first in the optimization

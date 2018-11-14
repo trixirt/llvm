@@ -1,4 +1,4 @@
-//===-- CodeSizeOutliner.cpp - Propagate constants through calls -----===//
+//===-- IROutliner.cpp - Propagate constants through calls -----===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -2182,7 +2182,7 @@ bool runImpl(Module &M, ProfileSummaryInfo *PSI,
 }
 } // namespace
 
-PreservedAnalyses CodeSizeOutlinerPass::run(Module &M,
+PreservedAnalyses IROutlinerPass::run(Module &M,
                                             ModuleAnalysisManager &AM) {
   auto &FAM = AM.getResult<FunctionAnalysisManagerModuleProxy>(M).getManager();
   std::function<TargetTransformInfo &(Function &)> GetTTI =
@@ -2198,10 +2198,10 @@ PreservedAnalyses CodeSizeOutlinerPass::run(Module &M,
                                          : PreservedAnalyses::all();
 }
 
-struct CodeSizeOutlinerLegacyPass : public ModulePass {
+struct IROutlinerLegacyPass : public ModulePass {
   static char ID; // Pass identification, replacement for typeid
-  CodeSizeOutlinerLegacyPass() : ModulePass(ID) {
-    initializeCodeSizeOutlinerLegacyPassPass(*PassRegistry::getPassRegistry());
+  IROutlinerLegacyPass() : ModulePass(ID) {
+    initializeIROutlinerLegacyPassPass(*PassRegistry::getPassRegistry());
   }
   void getAnalysisUsage(AnalysisUsage &AU) const override {
     AU.addRequired<ProfileSummaryInfoWrapperPass>();
@@ -2235,13 +2235,13 @@ struct CodeSizeOutlinerLegacyPass : public ModulePass {
   }
 };
 
-char CodeSizeOutlinerLegacyPass::ID = 0;
-INITIALIZE_PASS_BEGIN(CodeSizeOutlinerLegacyPass, DEBUG_TYPE,
-                      "Code Size Outliner", false, false)
+char IROutlinerLegacyPass::ID = 0;
+INITIALIZE_PASS_BEGIN(IROutlinerLegacyPass, DEBUG_TYPE,
+                      "IR Outliner", false, false)
 INITIALIZE_PASS_DEPENDENCY(ProfileSummaryInfoWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(TargetTransformInfoWrapperPass)
-INITIALIZE_PASS_END(CodeSizeOutlinerLegacyPass, DEBUG_TYPE,
-                    "Code Size Outliner", false, false)
-ModulePass *llvm::createCodeSizeOutlinerPass() {
-  return new CodeSizeOutlinerLegacyPass();
+INITIALIZE_PASS_END(IROutlinerLegacyPass, DEBUG_TYPE,
+                    "IR Outliner", false, false)
+ModulePass *llvm::createIROutlinerPass() {
+  return new IROutlinerLegacyPass();
 }
