@@ -11,7 +11,7 @@
 //  instructions from the current module.
 //
 //===----------------------------------------------------------------------===//
-#include "llvm/Transforms/IPO/CodeSizeOutliner.h"
+#include "llvm/Transforms/IPO/IROutliner.h"
 #include "llvm/ADT/BitVector.h"
 #include "llvm/ADT/IntervalMap.h"
 #include "llvm/ADT/SetVector.h"
