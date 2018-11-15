@@ -191,9 +191,13 @@ static cl::opt<bool> EnableSyntheticCounts(
     cl::desc("Run synthetic function entry count generation "
              "pass"));
 
-static cl::opt<bool> EnableEarlyCSO(
-    "enable-npm-early-cso", cl::init(false), cl::Hidden,
-    cl::desc("Enable an early run of the code size outlining pass for the new PM (default = off)"));
+static cl::opt<bool> EnableEarlyIROutliner(
+    "enable-npm-early-ir-outliner", cl::init(false), cl::Hidden,
+    cl::desc("Enable an early run of the ir outlining pass for the new PM (default = off)"));
+
+static cl::opt<bool> EnableIROutliner(
+    "enable-npm-ir-outliner", cl::init(false), cl::Hidden,
+    cl::desc("Enable the ir outlining pass for the new PM (default = off)"));
 
 static Regex DefaultAliasRegex(
     "^(default|thinlto-pre-link|thinlto|lto-pre-link|lto)<(O[0123sz])>$");
@@ -656,7 +660,7 @@ PassBuilder::buildModuleSimplificationPipeline(OptimizationLevel Level,
     MPM.addPass(SyntheticCountsPropagation());
 
   // Add an early code size outlining pass.
-  if (EnableEarlyCSO && isOptimizingForSize(Level))
+  if (EnableEarlyIROutliner && isOptimizingForSize(Level))
     MPM.addPass(IROutlinerPass());
 
   // Require the GlobalsAA analysis for the module so we can query it within
@@ -855,8 +859,8 @@ PassBuilder::buildModuleOptimizationPipeline(OptimizationLevel Level,
 
   MPM.addPass(CGProfilePass());
 
-  // Add the late outlining pass.
-  if(isOptimizingForSize(Level))
+  // Add the late ir outlining pass.
+  if(EnableIROutliner && isOptimizingForSize(Level))
     MPM.addPass(IROutlinerPass());
 
   // Now we need to do some global optimization transforms.

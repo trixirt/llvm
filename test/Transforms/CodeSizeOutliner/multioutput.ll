@@ -1,4 +1,4 @@
-; RUN: opt < %s -codesizeoutliner -enable-cso -cso-min-benefit=1 -simplifycfg -S | FileCheck %s
+; RUN: opt < %s -iroutliner -enable-ir-outliner -iro-min-benefit=1 -simplifycfg -S | FileCheck %s
 
 target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
 target triple = "x86_64-unknown-linux-gnu"
@@ -22,7 +22,7 @@ entry:
   %10 = add i32 1, %9
 
 
-  ; CHECK: call {{.*}} @cso_0(i32 6)
+  ; CHECK: call {{.*}} @_iro_0(i32 6)
   ; CHECK: add i32
   ; CHECK-NEXT: ret i32
   %11 = call i32 @someFn(i32 0, i32 0, i32 0, i32 0, i32 0, i32 1, i32 6)
@@ -32,7 +32,7 @@ entry:
 }
 
 
-; CHECK:define {{.*}} @cso_0(i32)
+; CHECK:define {{.*}} @_iro_0(i32)
 ; CHECK: call {{.*}}i32
 
 declare i32 @someFn(i32, i32, i32, i32, i32, i32, i32) #1

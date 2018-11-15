@@ -39,18 +39,18 @@
 using namespace llvm;
 
 static cl::opt<unsigned> MinOccurrences(
-    "cso-min-occurrences", cl::init(2), cl::Hidden,
+    "iro-min-occurrences", cl::init(2), cl::Hidden,
     cl::desc(
         "Min number of occurrences to consider a candidate for outlining."));
 static cl::opt<unsigned> MinInstructionLength(
-    "cso-min-instructions", cl::init(1), cl::Hidden,
+    "iro-min-instructions", cl::init(1), cl::Hidden,
     cl::desc(
         "Min number of instructions to consider a candidate for outlining."));
 static cl::opt<unsigned>
-    MinBenefit("cso-min-benefit", cl::init(1), cl::Hidden,
+    MinBenefit("iro-min-benefit", cl::init(1), cl::Hidden,
                cl::desc("Min estimated benefit to be considered profitable."));
 
-#define DEBUG_TYPE "codesizeoutliner"
+#define DEBUG_TYPE "iroutliner"
 STATISTIC(NumOccurrencesOutlined, "Number of occurrences outlined");
 STATISTIC(NumCandidatesOutlined, "Number of outlined functions created");
 
@@ -504,7 +504,7 @@ struct FunctionSplicer {
 
     // Create a new block to patch the outlined section.
     BasicBlock *OutlineBlock =
-        BasicBlock::Create(ParentFn->getContext(), "cso.patch", ParentFn);
+        BasicBlock::Create(ParentFn->getContext(), "iro.patch", ParentFn);
 
     // Create parameter vector for the new call.
     unsigned NumOutputs = CD.Outputs.count();
@@ -656,7 +656,7 @@ struct FunctionSplicer {
     uniqueInputs(OM.getCandidateData(C));
 
     // Set the final function name.
-    OutlinedFn->setName(Twine("cso_") + Twine(NumOutlined++));
+    OutlinedFn->setName(Twine("_iro_") + Twine(NumOutlined++));
 
     // Debug.
     LLVM_DEBUG(dbgs() << "** Outlining : " << OutlinedFn->getName() << "\n"

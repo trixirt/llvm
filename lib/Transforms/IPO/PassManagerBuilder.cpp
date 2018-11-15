@@ -152,12 +152,12 @@ static cl::opt<bool> EnableGVNSink(
     "enable-gvn-sink", cl::init(false), cl::Hidden,
     cl::desc("Enable the GVN sinking pass (default = off)"));
 
-static cl::opt<bool> EnableCSO(
-  "enable-cso", cl::init(false), cl::Hidden,
-  cl::desc("Enable ir outlining size (default = off)"));
+static cl::opt<bool> EnableIROutliner(
+  "enable-ir-outliner", cl::init(false), cl::Hidden,
+  cl::desc("Enable ir outlining (default = off)"));
 
-static cl::opt<bool> EnableEarlyCSO(
-  "enable-early-cso", cl::init(false), cl::Hidden,
+static cl::opt<bool> EnableEarlyIROutliner(
+  "enable-early-ir-outliner", cl::init(false), cl::Hidden,
   cl::desc("Enable an early run of the ir outliner pass (default = off)"));
 
 PassManagerBuilder::PassManagerBuilder() {
@@ -523,7 +523,7 @@ void PassManagerBuilder::populateModulePassManager(
     addPGOInstrPasses(MPM);
 
   // Add an early run of the ir outliner pass.
-  if (EnableEarlyCSO && SizeLevel > 0) {
+  if (EnableEarlyIROutliner && SizeLevel > 0) {
     MPM.add(createSeparateConstOffsetFromGEPPass());
     MPM.add(createIROutlinerPass());
     MPM.add(createPostOrderFunctionAttrsLegacyPass());
@@ -722,7 +722,7 @@ void PassManagerBuilder::populateModulePassManager(
   }
 
   // Add a late run of the ir outliner pass.
-  if (EnableCSO && SizeLevel > 0) {
+  if (EnableIROutliner && SizeLevel > 0) {
     MPM.add(createIROutlinerPass());
     MPM.add(createTailCallEliminationPass());
     MPM.add(createPostOrderFunctionAttrsLegacyPass());
